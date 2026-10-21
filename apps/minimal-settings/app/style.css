@@ -16,6 +16,8 @@ html, body {
   overflow: hidden;
 }
 
+body { position: fixed; inset: 0; }
+
 body {
   color: var(--text);
   background:
@@ -72,12 +74,34 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 
 .setting:last-child { border-bottom: 0; }
 .panel > .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
-.panel > .setting:last-of-type { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+.panel > .setting:last-child { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
 .setting .copy { min-width: 0; display: flex; flex-direction: column; gap: 0.45vh; }
 .setting strong, .info-card strong { font-size: 1.75vh; font-weight: 600; }
-.setting small { color: var(--muted); font-size: 1.3vh; }
+.setting small { overflow: hidden; color: var(--muted); font-size: 1.3vh; text-overflow: ellipsis; white-space: nowrap; }
 .setting .value { grid-column: 3; color: var(--text); text-align: right; font-size: 1.55vh; white-space: nowrap; }
 .setting.choice-setting .value { grid-column: 2 / 4; }
+
+.setting.choice-setting.is-editing .value {
+  justify-self: end;
+  min-width: 7.5vw;
+  padding: 0.75vh 0.8vw;
+  border-radius: 999px;
+  color: var(--bg);
+  background: var(--accent);
+  text-align: center;
+  font-weight: 700;
+}
+
+.setting.choice-setting.is-editing .value::before { content: "‹  "; }
+.setting.choice-setting.is-editing .value::after { content: "  ›"; }
+.setting:not(.choice-setting).is-editing .range {
+  height: 0.9vh;
+  box-shadow: 0 0 0 0.22vh var(--accent), 0 0 1.2vh rgba(114, 214, 255, 0.5);
+}
+.setting:not(.choice-setting).is-editing .value { color: var(--accent); font-weight: 700; }
+
+.status-setting { cursor: default; }
+.section-gap { margin-top: 2.2vh; }
 
 .range {
   position: relative;
@@ -105,13 +129,13 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 
 .info-card {
   margin-top: 1.5vh;
-  padding: 2.2vh 1.5vw;
+  padding: 1.6vh 1.5vw;
   border-radius: 1.5vh;
   background: var(--surface);
 }
 
 .info-card p {
-  margin: 0.8vh 0 2vh;
+  margin: 0.6vh 0 1.2vh;
   color: var(--muted);
   font-size: 1.4vh;
   line-height: 1.45;

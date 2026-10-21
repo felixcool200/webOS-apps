@@ -3,6 +3,7 @@
 
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
   var selected = null;
+  var editing = null;
   var state = {};
   var busy = false;
 
@@ -29,7 +30,8 @@
       aiSoundPlus: "AI Sound Pro", standard: "Standard", movie: "Cinema",
       news: "Clear Voice", sports: "Sports", music: "Music", game: "Game"
     }},
-    quickStartMode: { category: "option", kind: "choice", labels: { on: "On", off: "Off" } }
+    quickStartMode: { category: "option", kind: "choice", labels: { on: "On", off: "Off" } },
+    wifiEnabled: { category: "network", kind: "choice", labels: { enabled: "On", disabled: "Off" } }
   };
 
   function lunaCall(uri, payload) {
@@ -94,6 +96,44 @@
     return values;
   }
 
+  function networkDetail(connection) {
+    var parts = [];
+    if (connection.ssid) { parts.push(connection.ssid); }
+    if (connection.ipAddress) { parts.push(connection.ipAddress); }
+    if (connection.dns1) { parts.push("DNS " + connection.dns1); }
+    if (connection.onInternet === "no") { parts.push("No internet"); }
+    return parts.join(" · ");
+  }
+
+  function renderNetwork(connectionStatus, wifiStatus) {
+    var wifi = connectionStatus && connectionStatus.wifi ? connectionStatus.wifi : {};
+    var wired = connectionStatus && connectionStatus.wired ? connectionStatus.wired : {};
+    var serviceStatus = wifiStatus && wifiStatus.status;
+    var enabled = serviceStatus !== "serviceDisabled";
+    if (!serviceStatus && wifi.state !== "connected") { enabled = false; }
+
+    state.wifiEnabled = { value: enabled ? "enabled" : "disabled", values: ["disabled", "enabled"] };
+    renderSetting("wifiEnabled");
+
+    var wifiDetail = document.getElementById("wifi-detail");
+    if (!enabled) { wifiDetail.textContent = "Wireless radio is off"; }
+    else if (wifi.state === "connected") { wifiDetail.textContent = networkDetail(wifi) || "Connected"; }
+    else { wifiDetail.textContent = "On · Not connected"; }
+
+    var ethernetValue = document.getElementById("ethernet-value");
+    var ethernetDetail = document.getElementById("ethernet-detail");
+    if (wired.state === "connected") {
+      ethernetValue.textContent = "Connected";
+      ethernetDetail.textContent = networkDetail(wired) || "Cable connected";
+    } else if (wired.plugged) {
+      ethernetValue.textContent = "No network";
+      ethernetDetail.textContent = "Cable connected · No address";
+    } else {
+      ethernetValue.textContent = "Unplugged";
+      ethernetDetail.textContent = "No cable connected";
+    }
+  }
+
   function readCurrent(category, keys) {
     return rootLuna("luna://com.webos.settingsservice/getSystemSettings", { category: category, keys: keys });
   }
@@ -112,7 +152,9 @@
       readChoices("pictureMode"),
       readChoices("energySaving"),
       readChoices("soundMode"),
-      readChoices("quickStartMode")
+      readChoices("quickStartMode"),
+      rootLuna("luna://com.webos.service.connectionmanager/getstatus", {}).catch(function () { return null; }),
+      rootLuna("luna://com.webos.service.wifi/getstatus", {}).catch(function () { return null; })
     ]).then(function (results) {
       var picture = results[0].settings || {};
       var sound = results[1].settings || {};
@@ -124,8 +166,10 @@
       state.energySaving.values = allowedValues("energySaving", results[4], state.energySaving.value);
       state.soundMode.values = allowedValues("soundMode", results[5], state.soundMode.value);
       state.quickStartMode.values = allowedValues("quickStartMode", results[6], state.quickStartMode.value);
+      renderNetwork(results[7], results[8]);
       Object.keys(SPECS).forEach(renderSetting);
-      setStatus("Ready", "ok");
+      if (editing) { editingStatus(); }
+      else { setStatus("Ready", "ok"); }
     }).catch(function (error) {
       setStatus("Could not read settings: " + error.message, "error");
     });
@@ -143,7 +187,7 @@
     if (!values.length) { return undefined; }
     var index = values.indexOf(item.value);
     if (index < 0) { index = 0; }
-    return values[(index + direction + values.length) % values.length];
+    return values[Math.max(0, Math.min(values.length - 1, index + direction))];
   }
 
   function writeSetting(key, value) {
@@ -154,19 +198,27 @@
     element.classList.add("is-busy");
     setStatus("Changing " + element.querySelector("strong").textContent + "…");
 
-    var context = key === "pictureMode" || spec.category === "option" ? Promise.resolve({}) :
-      readCurrent(spec.category, [key]).then(function (result) { return result.dimension || {}; });
+    var request;
+    if (key === "wifiEnabled") {
+      request = rootLuna("luna://com.webos.service.connectionmanager/setstate", { wifi: value });
+    } else {
+      var context = key === "pictureMode" || spec.category === "option" ? Promise.resolve({}) :
+        readCurrent(spec.category, [key]).then(function (result) { return result.dimension || {}; });
+      request = context.then(function (dimension) {
+        var payload = { category: spec.category, settings: {} };
+        payload.settings[key] = value;
+        if (Object.keys(dimension).length) { payload.dimension = dimension; }
+        return rootLuna("luna://com.webos.settingsservice/setSystemSettings", payload);
+      });
+    }
 
-    context.then(function (dimension) {
-      var payload = { category: spec.category, settings: {} };
-      payload.settings[key] = value;
-      if (Object.keys(dimension).length) { payload.dimension = dimension; }
-      return rootLuna("luna://com.webos.settingsservice/setSystemSettings", payload);
-    }).then(function () {
+    request.then(function () {
       state[key].value = value;
       renderSetting(key);
-      setStatus("Saved", "ok");
+      if (editing) { editingStatus("Saved"); }
+      else { setStatus("Saved", "ok"); }
       if (key === "pictureMode") { return load(); }
+      if (key === "wifiEnabled") { window.setTimeout(load, 1200); }
     }).catch(function (error) {
       setStatus("Could not change setting: " + error.message, "error");
     }).then(function () {
@@ -176,8 +228,8 @@
   }
 
   function adjustSelected(direction) {
-    if (!selected) { return; }
-    var key = selected.getAttribute("data-setting");
+    if (!editing) { return; }
+    var key = editing.getAttribute("data-setting");
     if (key) { writeSetting(key, nextValue(key, direction)); }
   }
 
@@ -191,7 +243,41 @@
     if (selected) { selected.classList.add("is-focused"); }
   }
 
-  function verticalNeighbor(direction) {
+  function settingName(element) {
+    var label = element && element.querySelector("strong");
+    return label ? label.textContent : "setting";
+  }
+
+  function updateHints(isEditing) {
+    document.getElementById("move-hint").innerHTML = isEditing ? "<b>← →</b> Change" : "<b>Arrows</b> Move";
+    document.getElementById("select-hint").innerHTML = isEditing ? "<b>OK</b> Done" : "<b>OK</b> Select";
+    document.getElementById("back-hint").innerHTML = isEditing ? "<b>Back</b> Done" : "<b>Back</b> Home";
+  }
+
+  function editingStatus(prefix) {
+    if (!editing) { return; }
+    setStatus((prefix ? prefix + " · " : "") + "Editing " + settingName(editing) + " — Left/Right changes", prefix ? "ok" : "");
+  }
+
+  function startEditing(element) {
+    if (!element || !element.getAttribute("data-setting")) { return; }
+    if (editing && editing !== element) { editing.classList.remove("is-editing"); }
+    setFocus(element);
+    editing = element;
+    editing.classList.add("is-editing");
+    updateHints(true);
+    editingStatus();
+  }
+
+  function stopEditing(showReady) {
+    if (!editing) { return; }
+    editing.classList.remove("is-editing");
+    editing = null;
+    updateHints(false);
+    if (showReady !== false) { setStatus("Ready", "ok"); }
+  }
+
+  function spatialNeighbor(direction) {
     var items = focusables();
     if (!selected) { return items[0]; }
     var from = selected.getBoundingClientRect();
@@ -204,9 +290,11 @@
       var rect = item.getBoundingClientRect();
       var dx = rect.left + rect.width / 2 - fx;
       var dy = rect.top + rect.height / 2 - fy;
-      var forward = direction === KEY.DOWN ? dy : -dy;
+      var vertical = direction === KEY.UP || direction === KEY.DOWN;
+      var forward = vertical ? (direction === KEY.DOWN ? dy : -dy) : (direction === KEY.RIGHT ? dx : -dx);
       if (forward <= 2) { return; }
-      var candidate = forward + Math.abs(dx) * 1.8;
+      var cross = vertical ? Math.abs(dx) : Math.abs(dy);
+      var candidate = forward + cross * 1.8;
       if (candidate < score) { score = candidate; best = item; }
     });
     return best;
@@ -219,21 +307,30 @@
 
   function initNavigation() {
     focusables().forEach(function (element) {
-      element.addEventListener("mouseenter", function () { setFocus(element); });
+      element.addEventListener("mouseenter", function () {
+        if (editing && editing !== element) { stopEditing(false); }
+        setFocus(element);
+      });
     });
     document.addEventListener("keydown", function (event) {
       if (event.keyCode === KEY.BACK) {
         event.preventDefault();
-        if (window.webOSSystem && window.webOSSystem.close) { window.webOSSystem.close(); }
-      } else if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
-        event.preventDefault();
-        setFocus(verticalNeighbor(event.keyCode));
-      } else if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
+        if (editing) { stopEditing(); }
+        else if (window.webOSSystem && window.webOSSystem.close) { window.webOSSystem.close(); }
+      } else if (editing && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) {
         event.preventDefault();
         adjustSelected(event.keyCode === KEY.RIGHT ? 1 : -1);
+      } else if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN ||
+                 event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
+        event.preventDefault();
+        if (editing) { stopEditing(false); }
+        setFocus(spatialNeighbor(event.keyCode));
+        setStatus("Ready", "ok");
       } else if (event.keyCode === KEY.ENTER) {
         event.preventDefault();
-        if (selected) { selected.click(); }
+        if (editing) { stopEditing(); }
+        else if (selected && selected.getAttribute("data-setting")) { startEditing(selected); }
+        else if (selected) { selected.click(); }
       }
     });
   }
@@ -242,12 +339,11 @@
     initNavigation();
     document.querySelectorAll("[data-setting]").forEach(function (element) {
       element.addEventListener("click", function () {
-        var key = element.getAttribute("data-setting");
-        writeSetting(key, nextValue(key, 1));
+        if (editing === element) { stopEditing(); }
+        else { startEditing(element); }
       });
     });
     document.getElementById("advanced").addEventListener("click", openAdvanced);
-    document.getElementById("advanced-top").addEventListener("click", openAdvanced);
     document.addEventListener("webOSRelaunch", load);
     setFocus(document.querySelector("[data-setting]"));
     load();

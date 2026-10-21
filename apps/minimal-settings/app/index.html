@@ -13,7 +13,6 @@
         <h1>Settings</h1>
         <p>Fast controls for this TV</p>
       </div>
-      <button id="advanced-top" class="action focusable" type="button">Advanced LG settings</button>
     </header>
 
     <div class="columns">
@@ -58,20 +57,32 @@
             <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
             <span class="value">Loading…</span>
           </button>
-          <div class="info-card">
-            <strong>More settings</strong>
-            <p>Network, Bluetooth, inputs, accessibility, updates and tuning remain in LG Settings.</p>
-            <button id="advanced" class="action focusable" type="button">Open LG Settings</button>
+        </div>
+
+        <h2 class="section-gap">Network</h2>
+        <div class="panel">
+          <button class="setting choice-setting focusable" data-setting="wifiEnabled" type="button">
+            <span class="copy"><strong>Wi-Fi</strong><small id="wifi-detail">Reading network status…</small></span>
+            <span class="value">Loading…</span>
+          </button>
+          <div class="setting status-setting">
+            <span class="copy"><strong>Ethernet</strong><small id="ethernet-detail">Reading network status…</small></span>
+            <span id="ethernet-value" class="value">Loading…</span>
           </div>
+        </div>
+
+        <div class="info-card">
+          <strong>More settings</strong>
+          <p>Bluetooth, inputs, accessibility, updates and detailed network setup remain in LG Settings.</p>
+          <button id="advanced" class="action focusable" type="button">Open LG Settings</button>
         </div>
       </section>
     </div>
 
     <footer>
-      <span><b>↑ ↓</b> Move</span>
-      <span><b>← →</b> Change</span>
-      <span><b>OK</b> Next</span>
-      <span><b>Back</b> Home</span>
+      <span id="move-hint"><b>Arrows</b> Move</span>
+      <span id="select-hint"><b>OK</b> Select</span>
+      <span id="back-hint"><b>Back</b> Home</span>
       <span id="status">Reading current settings…</span>
     </footer>
   </main>
