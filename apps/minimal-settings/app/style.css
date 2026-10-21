@@ -81,24 +81,14 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .setting .value { grid-column: 3; color: var(--text); text-align: right; font-size: 1.55vh; white-space: nowrap; }
 .setting.choice-setting .value { grid-column: 2 / 4; }
 
-.setting.choice-setting.is-editing .value {
-  justify-self: end;
-  min-width: 7.5vw;
-  padding: 0.75vh 0.8vw;
-  border-radius: 999px;
-  color: var(--bg);
-  background: var(--accent);
-  text-align: center;
+.setting.is-editing .value {
+  color: var(--accent);
   font-weight: 700;
+  text-shadow: 0 0 0.7vh rgba(114, 214, 255, 0.85);
 }
 
-.setting.choice-setting.is-editing .value::before { content: "‹  "; }
-.setting.choice-setting.is-editing .value::after { content: "  ›"; }
-.setting:not(.choice-setting).is-editing .range {
-  height: 0.9vh;
-  box-shadow: 0 0 0 0.22vh var(--accent), 0 0 1.2vh rgba(114, 214, 255, 0.5);
-}
-.setting:not(.choice-setting).is-editing .value { color: var(--accent); font-weight: 700; }
+.setting.is-editing .value.can-decrease::before { content: "‹  "; }
+.setting.is-editing .value.can-increase::after { content: "  ›"; }
 
 .status-setting { cursor: default; }
 .section-gap { margin-top: 2.2vh; }

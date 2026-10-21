@@ -31,7 +31,7 @@
       aiSoundPlus: "AI Sound Pro", standard: "Standard", movie: "Cinema",
       news: "Clear Voice", sports: "Sports", music: "Music", game: "Game"
     }},
-    quickStartMode: { category: "option", kind: "choice", labels: { on: "On", off: "Off" } },
+    quickStartMode: { category: "option", kind: "choice", order: ["off", "on"], labels: { on: "On", off: "Off" } },
     wifiEnabled: { category: "network", kind: "choice", labels: { enabled: "On", disabled: "Off" } }
   };
 
@@ -87,6 +87,7 @@
       var percent = (Number(item.value) - spec.min) / (spec.max - spec.min) * 100;
       element.querySelector(".range").style.setProperty("--fill", Math.max(0, Math.min(100, percent)) + "%");
     }
+    renderEditDirections(key);
   }
 
   function allowedValues(key, response, current) {
@@ -94,6 +95,16 @@
     var values = list.filter(function (entry) { return entry.active !== false && entry.visible !== false; })
       .map(function (entry) { return entry.value; });
     if (values.indexOf(current) === -1) { values.unshift(current); }
+    if (SPECS[key].order) {
+      var order = SPECS[key].order;
+      values.sort(function (left, right) {
+        var leftIndex = order.indexOf(left);
+        var rightIndex = order.indexOf(right);
+        if (leftIndex < 0) { leftIndex = order.length; }
+        if (rightIndex < 0) { rightIndex = order.length; }
+        return leftIndex - rightIndex;
+      });
+    }
     return values;
   }
 
@@ -191,6 +202,17 @@
     return values[Math.max(0, Math.min(values.length - 1, index + direction))];
   }
 
+  function renderEditDirections(key) {
+    var element = elementFor(key);
+    var item = state[key];
+    if (!element || !item) { return; }
+    var value = element.querySelector(".value");
+    value.classList.remove("can-decrease", "can-increase");
+    if (editing !== element) { return; }
+    if (nextValue(key, -1) !== item.value) { value.classList.add("can-decrease"); }
+    if (nextValue(key, 1) !== item.value) { value.classList.add("can-increase"); }
+  }
+
   function writeSetting(key, value) {
     if (busy || value === undefined || value === state[key].value) { return; }
     busy = true;
@@ -267,14 +289,17 @@
     setFocus(element);
     editing = element;
     editing.classList.add("is-editing");
+    renderEditDirections(editing.getAttribute("data-setting"));
     updateHints(true);
     editingStatus();
   }
 
   function stopEditing(showReady) {
     if (!editing) { return; }
+    var key = editing.getAttribute("data-setting");
     editing.classList.remove("is-editing");
     editing = null;
+    renderEditDirections(key);
     updateHints(false);
     if (showReady !== false) { setStatus("Ready", "ok"); }
   }
