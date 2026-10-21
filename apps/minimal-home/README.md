@@ -22,3 +22,16 @@ The packaged app is written to `dist/`.
 ## Home selection
 
 Run `scripts/use-minimal-home.sh` on the TV to assign the Home category to Minimal Home and redirect any stock-Home fallback to it. Run `scripts/restore-stock-home.sh` to remove the runtime mount and restore LG Home.
+
+The activation script copies the packaged `appstub/replace-home.sh` into `/var/lib/webosbrew/init.d/50-minimal-home`, so the redirect is reapplied after a reboot. The redirect is a runtime bind mount and does not modify LG's Home files on the system partition.
+
+Copy and run it from the repository with:
+
+```sh
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
+  'cat > /home/root/use-minimal-home.sh' < scripts/use-minimal-home.sh
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
+  'chmod 755 /home/root/use-minimal-home.sh && /home/root/use-minimal-home.sh'
+```
+
+See the repository-level README for full installation, safe-upgrade, and recovery instructions.
