@@ -198,7 +198,7 @@
   function init() {
     initNavigation();
     document.getElementById("profile").addEventListener("click", function () { launch("com.webos.app.overlaymembership"); });
-    document.getElementById("settings").addEventListener("click", function () { launch("com.palm.app.settings"); });
+    document.getElementById("settings").addEventListener("click", function () { launch("org.webosbrew.minimalsettings"); });
 
     rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
       .catch(function () {})

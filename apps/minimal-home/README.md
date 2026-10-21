@@ -6,6 +6,8 @@ The local hidden-app list excludes Alexa, Camera, Sports, Home Hub, LG Channels,
 
 YouTube, Netflix, Disney+, Sveriges Radio, Viaplay, and Spotify are pinned to the start of the app grid in that order. Other apps keep their order from webOS.
 
+The Settings action opens the companion `org.webosbrew.minimalsettings` fullscreen app. That app retains a link to LG's advanced settings.
+
 The launcher installs as a normal removable app. Its optional Home replacement uses a reversible runtime bind mount containing a redirect stub; it does not write to the stock system partition.
 
 ## Build

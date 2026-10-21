@@ -71,6 +71,8 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 }
 
 .setting:last-child { border-bottom: 0; }
+.panel > .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
+.panel > .setting:last-of-type { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
 .setting .copy { min-width: 0; display: flex; flex-direction: column; gap: 0.45vh; }
 .setting strong, .info-card strong { font-size: 1.75vh; font-weight: 600; }
 .setting small { color: var(--muted); font-size: 1.3vh; }
