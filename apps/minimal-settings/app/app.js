@@ -4,6 +4,7 @@
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
   var selected = null;
   var editing = null;
+  var horizontalReturn = null;
   var state = {};
   var busy = false;
 
@@ -238,6 +239,7 @@
   }
 
   function setFocus(element) {
+    if (!element) { return; }
     if (selected) { selected.classList.remove("is-focused"); }
     selected = element;
     if (selected) { selected.classList.add("is-focused"); }
@@ -277,26 +279,70 @@
     if (showReady !== false) { setStatus("Ready", "ok"); }
   }
 
-  function spatialNeighbor(direction) {
+  function containingSection(element) {
+    while (element && element !== document.body) {
+      if (element.tagName === "SECTION") { return element; }
+      element = element.parentElement;
+    }
+    return null;
+  }
+
+  function navigationCenter(element) {
+    var card = element.classList.contains("action") && element.parentElement.classList.contains("info-card") ? element.parentElement : element;
+    var rect = card.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
+  function verticalNeighbor(direction) {
     var items = focusables();
     if (!selected) { return items[0]; }
-    var from = selected.getBoundingClientRect();
-    var fx = from.left + from.width / 2;
-    var fy = from.top + from.height / 2;
+    var section = containingSection(selected);
+    var from = navigationCenter(selected);
     var best = null;
     var score = Infinity;
     items.forEach(function (item) {
-      if (item === selected) { return; }
-      var rect = item.getBoundingClientRect();
-      var dx = rect.left + rect.width / 2 - fx;
-      var dy = rect.top + rect.height / 2 - fy;
-      var vertical = direction === KEY.UP || direction === KEY.DOWN;
-      var forward = vertical ? (direction === KEY.DOWN ? dy : -dy) : (direction === KEY.RIGHT ? dx : -dx);
+      if (item === selected || containingSection(item) !== section) { return; }
+      var point = navigationCenter(item);
+      var dx = point.x - from.x;
+      var dy = point.y - from.y;
+      var forward = direction === KEY.DOWN ? dy : -dy;
       if (forward <= 2) { return; }
-      var cross = vertical ? Math.abs(dx) : Math.abs(dy);
-      var candidate = forward + cross * 1.8;
+      var candidate = forward + Math.abs(dx) * 0.35;
       if (candidate < score) { score = candidate; best = item; }
     });
+    return best;
+  }
+
+  function navElement(name) {
+    return document.querySelector('[data-setting="' + name + '"]') || document.getElementById(name);
+  }
+
+  function horizontalNeighbor(direction) {
+    if (!selected) { return focusables()[0]; }
+    var opposite = direction === KEY.LEFT ? KEY.RIGHT : KEY.LEFT;
+    if (horizontalReturn && horizontalReturn.to === selected && horizontalReturn.direction === opposite) {
+      var previous = horizontalReturn.from;
+      horizontalReturn = null;
+      return previous;
+    }
+
+    var attribute = direction === KEY.LEFT ? "data-nav-left" : "data-nav-right";
+    var explicit = selected.getAttribute(attribute);
+    var best = explicit ? navElement(explicit) : null;
+    if (!best) {
+      var section = containingSection(selected);
+      var from = navigationCenter(selected);
+      var score = Infinity;
+      focusables().forEach(function (item) {
+        if (item === selected || containingSection(item) === section) { return; }
+        var point = navigationCenter(item);
+        var forward = direction === KEY.RIGHT ? point.x - from.x : from.x - point.x;
+        if (forward <= 2) { return; }
+        var candidate = Math.abs(point.y - from.y) + forward * 0.05;
+        if (candidate < score) { score = candidate; best = item; }
+      });
+    }
+    if (best) { horizontalReturn = { from: selected, to: best, direction: direction }; }
     return best;
   }
 
@@ -309,6 +355,7 @@
     focusables().forEach(function (element) {
       element.addEventListener("mouseenter", function () {
         if (editing && editing !== element) { stopEditing(false); }
+        if (selected !== element) { horizontalReturn = null; }
         setFocus(element);
       });
     });
@@ -324,7 +371,12 @@
                  event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
         event.preventDefault();
         if (editing) { stopEditing(false); }
-        setFocus(spatialNeighbor(event.keyCode));
+        if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
+          horizontalReturn = null;
+          setFocus(verticalNeighbor(event.keyCode));
+        } else {
+          setFocus(horizontalNeighbor(event.keyCode));
+        }
         setStatus("Ready", "ok");
       } else if (event.keyCode === KEY.ENTER) {
         event.preventDefault();
