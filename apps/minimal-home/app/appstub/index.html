@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script>
+    (function () {
+      function openMinimalHome() {
+        var bridge = new window.PalmServiceBridge();
+        bridge.onservicecallback = function () {
+          if (window.webOSSystem && window.webOSSystem.close) {
+            window.webOSSystem.close();
+          }
+        };
+        bridge.call(
+          "luna://com.webos.service.applicationManager/launch",
+          JSON.stringify({ id: "org.webosbrew.minimalhome" })
+        );
+      }
+      openMinimalHome();
+      document.addEventListener("webOSRelaunch", openMinimalHome);
+    }());
+  </script>
+</head>
+<body></body>
+</html>

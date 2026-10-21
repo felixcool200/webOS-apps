@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal Home</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Home</h1>
+      <nav aria-label="System">
+        <button class="top-action focusable" id="profile" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-5 0-8 2.5-8 5.3V21h16v-1.7C20 16.5 17 14 12 14Z"/></svg>
+          <span>Profile</span>
+        </button>
+        <button class="top-action focusable" id="settings" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19.4 13 .1-1-.1-1 2.1-1.6-2-3.5-2.6 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1L6.1 5.9l-2 3.5L6.2 11a8 8 0 0 0-.1 1l.1 1-2.1 1.6 2 3.5 2.6-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.6 1 2-3.5L19.4 13ZM12.8 15.6a3.7 3.7 0 1 1 0-7.3 3.7 3.7 0 0 1 0 7.3Z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+    </header>
+
+    <section aria-labelledby="apps-heading">
+      <h2 id="apps-heading">Apps</h2>
+      <div id="apps" role="list"></div>
+      <div id="status" aria-live="polite">Loading apps…</div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "webos-minimal-home",
+  "version": "0.1.5",
+  "private": true,
+  "description": "A minimal launcher for rooted LG webOS TVs",
+  "scripts": {
+    "package": "ares-package app -o dist"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "3.2.6"
+  }
+}
