@@ -8,30 +8,41 @@
   <link rel="stylesheet" href="settings.css">
 </head>
 <body>
-  <main id="home-view">
+  <main id="home-view" class="grid-view">
     <header>
-      <h1>Home</h1>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p id="edit-hint" hidden>Left/Right moves · Down moves between the rows · Up hides · OK puts it down</p>
       <nav aria-label="System">
-        <button class="top-action focusable" id="settings" type="button">
+        <button class="top-action focusable" id="settings" type="button" aria-label="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19.4 13 .1-1-.1-1 2.1-1.6-2-3.5-2.6 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1L6.1 5.9l-2 3.5L6.2 11a8 8 0 0 0-.1 1l.1 1-2.1 1.6 2 3.5 2.6-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.6 1 2-3.5L19.4 13ZM12.8 15.6a3.7 3.7 0 1 1 0-7.3 3.7 3.7 0 0 1 0 7.3Z"/></svg>
-          <span>Settings</span>
         </button>
       </nav>
     </header>
 
-    <section aria-labelledby="apps-heading">
-      <h2 id="apps-heading">Apps</h2>
-      <div id="apps" role="list"></div>
+    <section class="apps-section" aria-label="Apps">
+      <div id="apps" class="grid" role="list"></div>
       <div id="status" aria-live="polite">Loading apps…</div>
     </section>
+
+    <section id="tools-section" class="tools-section" aria-labelledby="tools-heading" hidden>
+      <h2 id="tools-heading">Tools</h2>
+      <div id="tools" class="grid small" role="list"></div>
+    </section>
+  </main>
+
+  <main id="hidden-view" class="grid-view" hidden>
+    <header>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Hidden apps</p>
+    </header>
+    <p class="view-hint">OK shows an app again · Back returns Home</p>
+    <div id="hidden-apps" class="grid" role="list"></div>
   </main>
 
   <main id="settings-view" hidden>
     <header>
-      <div>
-        <h1>Settings</h1>
-        <p>Fast controls for this TV</p>
-      </div>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Settings</p>
     </header>
 
     <div class="columns">

@@ -1,10 +1,18 @@
 # Minimal Home for webOS
 
-A small, local launcher for a rooted LG webOS TV. It shows installed, visible apps and one system action: Settings. (LG's Profile panel was dropped: it loads LG's online account page and took about 6 s to appear.)
+A small, local launcher for a rooted LG webOS TV. It shows a clock and date, installed apps in two rows, and one system action: a Settings cog. (LG's Profile panel was dropped: it loads LG's online account page and took about 6 s to appear.)
 
 The local hidden-app list excludes Alexa, Camera, Sports, Home Hub, LG Channels, LG Gallery+, and Media Player.
 
-YouTube, Netflix, Disney+, Sveriges Radio, Viaplay, and Spotify are pinned to the start of the app grid in that order. Other apps keep their order from webOS.
+The large top row holds the apps used day to day. YouTube, Netflix, Disney+, Sveriges Radio, Viaplay, and Spotify start it in that order; other apps keep their order from webOS. A smaller Tools row at the bottom holds setup apps, by default LG's Apps list, Homebrew Channel, LG Input Hook, and Life's Good Without Spying.
+
+## Edit mode
+
+Hold OK (or the pointer button) on an app for about half a second to pick it up, like LG's old launcher. Left/Right move it, Down moves it between the two rows, Up hides it, and OK or Back puts it down. A short press still opens the app.
+
+While apps are hidden, a "Hidden apps" tile ends the Tools row. It opens a view of the hidden apps, where OK on one shows it again. Alexa, Camera, Home Hub, LG Channels, LG Gallery+, Media Player, and Sports start out hidden.
+
+The order, the Tools row, and the hidden list are kept in `localStorage` on the TV (WebAppMgr's storage under `/var/lib/wam`), so they survive reinstalling Home. Apps installed later appear after the saved order.
 
 ## Settings view
 

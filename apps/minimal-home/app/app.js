@@ -3,15 +3,23 @@
 
   var APP_ID = "org.webosbrew.minimalhome";
   var APP_DIR = "/media/developer/apps/usr/palm/applications/" + APP_ID;
-  var HIDDEN_APP_IDS = {
-    "amazon.alexa.view": true,
-    "com.webos.app.camera": true,
-    "com.webos.app.homeconnect": true,
-    "com.webos.app.lgchannels": true,
-    "com.webos.app.lifeonscreen": true,
-    "com.webos.app.mediadiscovery": true,
-    "com.webos.app.sportsteamsettings": true
-  };
+  // Starting contents of the hidden list and the Tools row. Edit mode changes them, and the result is
+  // saved on the TV, so these only apply until the first change.
+  var DEFAULT_HIDDEN = [
+    "amazon.alexa.view",
+    "com.webos.app.camera",
+    "com.webos.app.homeconnect",
+    "com.webos.app.lgchannels",
+    "com.webos.app.lifeonscreen",
+    "com.webos.app.mediadiscovery",
+    "com.webos.app.sportsteamsettings"
+  ];
+  var DEFAULT_TOOLS = [
+    "com.webos.app.discovery",
+    "org.webosbrew.hbchannel",
+    "org.webosbrew.inputhook",
+    "ooo.lew.lifesgoodwithoutspying"
+  ];
   var PREFERRED_APP_ORDER = [
     "youtube.leanback.v4",
     "netflix",
@@ -30,7 +38,20 @@
   // Settings values are read this long after Home is on screen, so they are ready when the Settings
   // view opens without competing with the app list.
   var SETTINGS_PRELOAD_DELAY_MS = 1000;
+  // Holding OK (or the pointer button) on a tile this long picks it up for edit mode.
+  var HOLD_MS = 600;
+  var ORDER_KEY = "home.appOrder";
+  var HIDDEN_KEY = "home.hiddenApps";
+  var TOOLS_KEY = "home.toolApps";
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var view = "home";
+  var installed = [];
+  var editing = null;
+  var holdTimer = null;
+  var suppressClick = false;
+  // Set while the OK press that picked a tile up is still held, so its repeats don't put it down.
+  var awaitingRelease = false;
   var selected = null;
   var pointerX = 0;
   var pointerY = 0;
@@ -42,6 +63,39 @@
   function launch(id) {
     rootLuna("luna://com.webos.service.applicationManager/launch", { id: id }).catch(function () {
       notify("Could not open " + id);
+    });
+  }
+
+  // Returns the saved list, or the fallback if nothing has been saved yet.
+  function readList(key, fallback) {
+    try {
+      var list = JSON.parse(window.localStorage.getItem(key));
+      return Array.isArray(list) ? list : fallback.slice();
+    } catch (error) {
+      console.warn("Could not read " + key + ": " + error.message);
+      return fallback.slice();
+    }
+  }
+
+  function writeList(key, list) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(list));
+    } catch (error) {
+      console.warn("Could not save " + key + ": " + error.message);
+    }
+  }
+
+  function pad(number) { return number < 10 ? "0" + number : String(number); }
+
+  function tickClock() {
+    var now = new Date();
+    var time = pad(now.getHours()) + ":" + pad(now.getMinutes());
+    var date = DAYS[now.getDay()] + " " + now.getDate() + " " + MONTHS[now.getMonth()];
+    Array.prototype.forEach.call(document.querySelectorAll(".clock"), function (clock) {
+      if (clock.textContent !== time) { clock.textContent = time; }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".date"), function (label) {
+      if (label.textContent !== date) { label.textContent = date; }
     });
   }
 
@@ -57,7 +111,7 @@
     return "hack" + folder + "/" + app.icon;
   }
 
-  function makeTile(app) {
+  function makeTile(app, onActivate) {
     var button = document.createElement("button");
     button.type = "button";
     button.className = "app focusable";
@@ -83,32 +137,179 @@
     name.textContent = app.title || app.id;
     button.appendChild(picture);
     button.appendChild(name);
-    button.addEventListener("click", function () { launch(app.id); });
+    button.addEventListener("click", function () { onActivate(app, button); });
+    return button;
+  }
+
+  function makeHomeTile(app) {
+    var tile = makeTile(app, function () {
+      if (suppressClick) { suppressClick = false; return; }
+      if (editing) { stopEditing(); return; }
+      launch(app.id);
+    });
+    tile.addEventListener("mousedown", function () {
+      if (!editing) { startHold(tile, true); }
+    });
+    return tile;
+  }
+
+  // Ends the Tools row while any apps are hidden, and opens the Hidden apps view.
+  function makeHiddenTile(count) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.id = "hidden-tile";
+    button.className = "app focusable";
+    var picture = document.createElement("div");
+    picture.className = "app-icon fallback";
+    picture.textContent = count;
+    var name = document.createElement("span");
+    name.className = "app-name";
+    name.textContent = "Hidden apps";
+    button.appendChild(picture);
+    button.appendChild(name);
+    button.addEventListener("click", function () { showView("hidden"); });
     return button;
   }
 
   function showApps(apps) {
-    var box = document.getElementById("apps");
-    var status = document.getElementById("status");
     var visible = apps.filter(function (app) {
-      return app && app.visible !== false && app.id !== APP_ID &&
-        app.id !== "com.webos.app.home" && !HIDDEN_APP_IDS[app.id];
+      return app && app.visible !== false && app.id !== APP_ID && app.id !== "com.webos.app.home";
     });
 
     var rank = {};
     PREFERRED_APP_ORDER.forEach(function (id, index) { rank[id] = index; });
-    visible = visible.map(function (app, index) {
+    installed = visible.map(function (app, index) {
       return { app: app, originalIndex: index };
     }).sort(function (left, right) {
       var leftRank = Object.prototype.hasOwnProperty.call(rank, left.app.id) ? rank[left.app.id] : PREFERRED_APP_ORDER.length;
       var rightRank = Object.prototype.hasOwnProperty.call(rank, right.app.id) ? rank[right.app.id] : PREFERRED_APP_ORDER.length;
       return leftRank === rightRank ? left.originalIndex - right.originalIndex : leftRank - rightRank;
     }).map(function (entry) { return entry.app; });
+    renderApps(null);
+  }
 
-    visible.forEach(function (app) { box.appendChild(makeTile(app)); });
-    status.classList.toggle("visible", visible.length === 0);
-    status.textContent = visible.length ? "" : "No apps found";
-    if (visible.length) { setFocus(box.querySelector(".focusable")); }
+  // Draws both rows in the saved order without the hidden apps. Apps that are not in the saved order
+  // (installed later) follow it in the default order.
+  function renderApps(focusId) {
+    var apps = document.getElementById("apps");
+    var tools = document.getElementById("tools");
+    var status = document.getElementById("status");
+    var hidden = readList(HIDDEN_KEY, DEFAULT_HIDDEN);
+    var toolIds = readList(TOOLS_KEY, DEFAULT_TOOLS);
+    var saved = readList(ORDER_KEY, []);
+    var shown = installed.filter(function (app) { return hidden.indexOf(app.id) < 0; });
+    shown = shown.map(function (app, index) {
+      var position = saved.indexOf(app.id);
+      return { app: app, rank: position < 0 ? saved.length + index : position };
+    }).sort(function (left, right) { return left.rank - right.rank; }).map(function (entry) { return entry.app; });
+
+    apps.textContent = "";
+    tools.textContent = "";
+    shown.forEach(function (app) {
+      (toolIds.indexOf(app.id) < 0 ? apps : tools).appendChild(makeHomeTile(app));
+    });
+    var hiddenCount = installed.length - shown.length;
+    if (hiddenCount) { tools.appendChild(makeHiddenTile(hiddenCount)); }
+    document.getElementById("tools-section").hidden = !tools.children.length;
+    status.classList.toggle("visible", installed.length === 0);
+    status.textContent = installed.length ? "" : "No apps found";
+    if (view !== "home") { return; }
+    var focus = focusId && document.querySelector('#home-view [data-app-id="' + focusId + '"]');
+    setFocus(focus || document.querySelector("#apps .focusable") || document.querySelector("#home-view .focusable"));
+  }
+
+  function renderHidden() {
+    var box = document.getElementById("hidden-apps");
+    var hidden = readList(HIDDEN_KEY, DEFAULT_HIDDEN);
+    var apps = installed.filter(function (app) { return hidden.indexOf(app.id) >= 0; })
+      .sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
+    box.textContent = "";
+    apps.forEach(function (app) { box.appendChild(makeTile(app, unhide)); });
+    return apps.length;
+  }
+
+  function unhide(app, tile) {
+    var next = tile.nextElementSibling || tile.previousElementSibling;
+    writeList(HIDDEN_KEY, readList(HIDDEN_KEY, DEFAULT_HIDDEN).filter(function (id) { return id !== app.id; }));
+    renderApps(null);
+    if (!renderHidden()) { showView("home"); return; }
+    setFocus(next && document.querySelector('#hidden-apps [data-app-id="' + next.getAttribute("data-app-id") + '"]') ||
+      document.querySelector("#hidden-apps .focusable"));
+  }
+
+  function saveOrder() {
+    writeList(ORDER_KEY, Array.prototype.map.call(document.querySelectorAll("#home-view [data-app-id]"), function (tile) {
+      return tile.getAttribute("data-app-id");
+    }));
+  }
+
+  function startHold(tile, fromPointer) {
+    window.clearTimeout(holdTimer);
+    holdTimer = window.setTimeout(function () {
+      holdTimer = null;
+      suppressClick = fromPointer;
+      awaitingRelease = !fromPointer;
+      startEditing(tile);
+    }, HOLD_MS);
+  }
+
+  function startEditing(tile) {
+    editing = tile;
+    tile.classList.add("is-editing");
+    setFocus(tile);
+    document.getElementById("edit-hint").hidden = false;
+  }
+
+  function stopEditing() {
+    if (!editing) { return; }
+    editing.classList.remove("is-editing");
+    editing = null;
+    document.getElementById("edit-hint").hidden = true;
+  }
+
+  function moveEditing(step) {
+    var target = step > 0 ? editing.nextElementSibling : editing.previousElementSibling;
+    if (!target || !target.getAttribute("data-app-id")) { return; }
+    editing.parentNode.insertBefore(editing, step > 0 ? target.nextElementSibling : target);
+    saveOrder();
+    setFocus(editing);
+  }
+
+  // Moves the picked-up tile between the daily apps and the Tools row.
+  function switchRow() {
+    var tile = editing;
+    var id = tile.getAttribute("data-app-id");
+    var toolIds = readList(TOOLS_KEY, DEFAULT_TOOLS).filter(function (toolId) { return toolId !== id; });
+    var toTools = tile.parentNode.id === "apps";
+    if (toTools) {
+      toolIds.push(id);
+      document.getElementById("tools").insertBefore(tile, document.getElementById("hidden-tile"));
+    } else {
+      document.getElementById("apps").appendChild(tile);
+    }
+    writeList(TOOLS_KEY, toolIds);
+    document.getElementById("tools-section").hidden = !document.getElementById("tools").children.length;
+    saveOrder();
+    setFocus(tile);
+  }
+
+  function hideEditing() {
+    var tile = editing;
+    var next = tile.nextElementSibling && tile.nextElementSibling.getAttribute("data-app-id") ? tile.nextElementSibling : tile.previousElementSibling;
+    stopEditing();
+    writeList(HIDDEN_KEY, readList(HIDDEN_KEY, DEFAULT_HIDDEN).concat([tile.getAttribute("data-app-id")]));
+    tile.parentNode.removeChild(tile);
+    saveOrder();
+    renderApps(next ? next.getAttribute("data-app-id") : null);
+  }
+
+  function editKey(event) {
+    event.preventDefault();
+    if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) { moveEditing(event.keyCode === KEY.RIGHT ? 1 : -1); }
+    else if (event.keyCode === KEY.UP) { hideEditing(); }
+    else if (event.keyCode === KEY.DOWN) { switchRow(); }
+    else if (event.keyCode === KEY.ENTER && !awaitingRelease) { stopEditing(); }
+    else if (event.keyCode === KEY.BACK) { stopEditing(); }
   }
 
   function setFocus(element) {
@@ -121,7 +322,7 @@
   }
 
   function focusables() {
-    return Array.prototype.slice.call(document.querySelectorAll("#home-view .focusable"));
+    return Array.prototype.slice.call(document.querySelectorAll("#" + view + "-view .focusable"));
   }
 
   function neighbor(direction) {
@@ -149,16 +350,22 @@
     return best;
   }
 
-  // Home and Settings are two views of this page, so opening Settings needs no app launch.
+  // Home, Hidden apps and Settings are views of this page, so switching needs no app launch.
   function showView(name) {
     if (name === view) { return; }
+    var previous = view;
     view = name;
-    document.getElementById("home-view").hidden = name !== "home";
-    document.getElementById("settings-view").hidden = name !== "settings";
+    ["home", "hidden", "settings"].forEach(function (id) {
+      document.getElementById(id + "-view").hidden = id !== name;
+    });
+    if (previous === "settings") { MinimalSettings.close(); }
     if (name === "settings") { MinimalSettings.open(); }
-    else {
-      MinimalSettings.close();
-      setFocus(document.getElementById("settings"));
+    else if (name === "hidden") {
+      renderHidden();
+      setFocus(document.querySelector("#hidden-apps .focusable"));
+    } else {
+      var back = previous === "settings" ? document.getElementById("settings") : document.getElementById("hidden-tile");
+      setFocus(back || document.querySelector("#apps .focusable"));
     }
   }
 
@@ -181,19 +388,39 @@
         if (MinimalSettings.handleKey(event) === "leave") { showView("home"); }
         return;
       }
+      if (editing) { editKey(event); return; }
       if (event.keyCode === KEY.ENTER) {
+        // On Home a short press opens the tile when OK is released; holding it picks the tile up instead.
         event.preventDefault();
-        if (selected) { selected.click(); }
+        if (event.repeat || holdTimer) { return; }
+        if (view === "home" && selected && selected.getAttribute("data-app-id")) { startHold(selected, false); }
+        else if (selected) { selected.click(); }
         return;
       }
       if (event.keyCode === KEY.BACK) {
         // Home is where Back leads; closing it only made webOS start it again.
         event.preventDefault();
+        if (view === "hidden") { showView("home"); }
         return;
       }
       if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].indexOf(event.keyCode) !== -1) {
         event.preventDefault();
         setFocus(neighbor(event.keyCode));
+      }
+    });
+
+    document.addEventListener("keyup", function (event) {
+      if (event.keyCode === KEY.ENTER) { awaitingRelease = false; }
+      if (view !== "home" || event.keyCode !== KEY.ENTER || !holdTimer) { return; }
+      event.preventDefault();
+      window.clearTimeout(holdTimer);
+      holdTimer = null;
+      if (selected) { selected.click(); }
+    });
+    document.addEventListener("mouseup", function () {
+      if (view === "home" && holdTimer) {
+        window.clearTimeout(holdTimer);
+        holdTimer = null;
       }
     });
 
@@ -204,6 +431,7 @@
         MinimalSettings.handlePointer(event);
         return;
       }
+      if (editing) { return; }
       if (Math.abs(event.clientX - pointerX) + Math.abs(event.clientY - pointerY) > 8) {
         pointerX = event.clientX;
         pointerY = event.clientY;
@@ -228,7 +456,9 @@
     initNavigation();
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
     // The Home key activates Home again; it should always lead to the app grid.
-    document.addEventListener("webOSRelaunch", function () { showView("home"); });
+    document.addEventListener("webOSRelaunch", function () { stopEditing(); showView("home"); });
+    tickClock();
+    window.setInterval(tickClock, 1000);
 
     rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
       .catch(function () {})

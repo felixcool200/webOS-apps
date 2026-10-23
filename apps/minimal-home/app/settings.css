@@ -14,9 +14,7 @@
   justify-content: space-between;
 }
 
-#settings-view h1, #settings-view h2, #settings-view p { margin: 0; }
-#settings-view h1 { font-size: 4.1vh; font-weight: 600; letter-spacing: -0.03em; }
-#settings-view header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.6vh; }
+#settings-view h2, #settings-view p { margin: 0; }
 #settings-view h2 { margin: 0 0 1.6vh; color: var(--muted); font-size: 2vh; font-weight: 600; }
 
 #settings-view .columns {

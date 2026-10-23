@@ -1,6 +1,6 @@
 {
   "id": "org.webosbrew.minimalhome",
-  "version": "0.2.3",
+  "version": "0.3.2",
   "vendor": "Local",
   "type": "web",
   "main": "index.html",

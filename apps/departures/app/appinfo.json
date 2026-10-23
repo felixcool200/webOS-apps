@@ -1,6 +1,6 @@
 {
   "id": "org.webosbrew.departures",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "vendor": "Local",
   "type": "web",
   "main": "index.html",
