@@ -43,8 +43,9 @@ var RemoteButtons = (function () {
   var WIDTH = 210;
   var HEIGHT = 960;
   var HINTS = {
-    mr24: "The outlined button is the one selected in the list; pointing at a drawn button and pressing OK " +
-      "selects its row. Changes take effect right away. Test remote finds a button by pressing it.",
+    mr24: "The outlined button is the one selected in the list. Right moves into the drawing, where the arrows " +
+      "or the pointer pick a button and OK changes it. Changes take effect right away. Test remote finds a " +
+      "button by pressing it.",
     custom: "Your own buttons, for another remote or buttons the MR24 list lacks. Add one at the end of the " +
       "list, then name or remove it here. Changes take effect right away.",
     test: "Every button now only lights up, and pressing a listed button selects its row. Press any button " +
@@ -366,6 +367,7 @@ var RemoteButtons = (function () {
     $("remote-drawing").hidden = isCustomRemote;
     $("remote-card").hidden = !isCustomRemote;
     $("remote-model").querySelector(".value").textContent = REMOTES.filter(function (entry) { return entry.id === remote; })[0].name;
+    $("remote-hint").textContent = listening ? HINTS[listening] : HINTS[remote];
     showSelection();
   }
 
@@ -539,7 +541,7 @@ var RemoteButtons = (function () {
     var index = REMOTES.map(function (entry) { return entry.id; }).indexOf(remote);
     remote = REMOTES[(index + step + REMOTES.length) % REMOTES.length].id;
     store(REMOTE_KEY, remote);
-    lastCode = null;
+    lastCode = listed()[0] || (remote === "custom" ? "add" : null);
     render();
     // render() ends editing; keep changing the remote.
     startEditing($("remote-model"));

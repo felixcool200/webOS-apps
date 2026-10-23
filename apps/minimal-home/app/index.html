@@ -54,13 +54,16 @@
           <button id="remote-test" class="remote-action focusable" type="button">Test remote</button>
           <div id="remote-drawing" class="focusable" aria-hidden="true"><span class="remote-logo">LG</span></div>
           <div id="remote-card" hidden>
-            <small>Selected button</small>
+            <small>Selected</small>
+            <span class="card-key" aria-hidden="true"></span>
             <strong id="remote-card-title"></strong>
             <input id="remote-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" hidden>
             <span id="remote-card-code"></span>
+            <div class="card-actions">
+              <button id="remote-rename" class="remote-action focusable" type="button" hidden>Rename</button>
+              <button id="remote-remove" class="remote-action focusable" type="button" hidden>Remove</button>
+            </div>
           </div>
-          <button id="remote-rename" class="remote-action focusable" type="button" hidden>Rename</button>
-          <button id="remote-remove" class="remote-action focusable" type="button" hidden>Remove</button>
           <button id="remote-model" class="remote-choice focusable" type="button"><span>Remote</span><span class="value"></span></button>
         </div>
         <p class="remote-hint" id="remote-hint"></p>

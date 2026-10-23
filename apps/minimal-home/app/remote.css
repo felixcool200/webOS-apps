@@ -43,9 +43,11 @@
   gap: 3vw;
 }
 
+/* The same height with either remote, so Test remote and the remote choice stay in place. */
 .remote-stage {
   flex: none;
   width: 18vw;
+  height: calc(58vh + 2 * 5.6vh + 2 * 1.6vh);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -78,15 +80,18 @@
 #remote-view .remote-choice.is-editing .value::before { content: "‹  "; }
 #remote-view .remote-choice.is-editing .value::after { content: "  ›"; }
 
-/* The Custom remote's stand-in for the drawing: the selected or pressed button's name and code. */
+/* The Custom remote: a blank remote the size of the MR24 drawing, showing the selected or pressed
+   button, with Rename and Remove at its foot. */
 #remote-card {
-  height: 30vh;
-  padding: 2vh 1.4vw;
-  border-radius: 2vh;
+  flex: none;
+  align-self: center;
+  height: 58vh;
+  width: calc(58vh * 210 / 960);
+  padding: 6vh 0.9vh 3vh;
+  border-radius: 7.2vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 1.2vh;
   background: linear-gradient(180deg, #1b2027, #111419);
   box-shadow: inset 0 0 0 0.2vh rgba(255, 255, 255, 0.10), 0 2vh 5vh rgba(0, 0, 0, 0.45);
@@ -94,14 +99,47 @@
   transition: box-shadow 120ms ease;
 }
 
-#remote-card small { color: var(--muted); font-size: 1.3vh; }
-#remote-card strong { max-width: 100%; overflow: hidden; font-size: 2.8vh; text-overflow: ellipsis; white-space: nowrap; }
-#remote-card span { color: var(--muted); font-size: 1.5vh; }
+#remote-card small { color: var(--muted); font-size: 1.2vh; }
+#remote-card .card-key {
+  flex: none;
+  width: 5.2vh;
+  height: 5.2vh;
+  border-radius: 50%;
+  background: #2b313a;
+  box-shadow: 0 0 0 0.35vh var(--accent);
+}
+
+#remote-card strong {
+  max-width: 100%;
+  max-height: 7.2vh;
+  overflow: hidden;
+  font-size: 1.8vh;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+#remote-card > span:not(.card-key) { color: var(--muted); font-size: 1.3vh; line-height: 1.3; }
 #remote-card.lit { box-shadow: inset 0 0 0 0.3vh var(--accent), 0 0 4vh var(--accent); }
+#remote-card.lit .card-key { background: var(--accent); }
+
+#remote-card .card-actions {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+}
+
+#remote-view #remote-card .remote-action {
+  height: 4.4vh;
+  padding: 0;
+  border-radius: 2.2vh;
+  font-size: 1.35vh;
+}
 
 #remote-name {
   width: 100%;
-  padding: 1vh 0.8vw;
+  padding: 0.8vh 0.4vh;
   border: 0;
   border-radius: 1vh;
   outline: none;
@@ -109,7 +147,7 @@
   background: rgba(255, 255, 255, 0.12);
   color: var(--text);
   font: inherit;
-  font-size: 2.4vh;
+  font-size: 1.7vh;
   text-align: center;
 }
 
