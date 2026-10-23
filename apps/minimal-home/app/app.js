@@ -278,7 +278,7 @@
     hint.hidden = !arranging;
     document.getElementById("home-view").classList.toggle("is-arranging", arranging);
     var picked = installed.filter(function (app) { return app.id === pickedId; })[0];
-    hint.textContent = picked ? "Moving " + (picked.title || picked.id) + " · Arrows move it · Down to Hidden hides it · OK puts it down" :
+    hint.textContent = picked ? "Moving " + (picked.title || picked.id) + " · Arrows move it · Down to Hidden hides it · OK puts it down · Back when done" :
       "Arranging apps · OK picks one up · Back when done";
     window.clearTimeout(idleTimer);
     if (arranging && !pickedId) { idleTimer = window.setTimeout(stopArranging, ARRANGE_IDLE_MS); }
@@ -346,7 +346,9 @@
     if (pickedId) {
       event.preventDefault();
       if (directions[key]) { movePicked(directions[key]); }
-      else if ((key === KEY.ENTER && !awaitingRelease && !event.repeat) || key === KEY.BACK) { putDown(); }
+      else if (key === KEY.ENTER && !awaitingRelease && !event.repeat) { putDown(); }
+      // Back finishes arranging at once, leaving the app where it is.
+      else if (key === KEY.BACK) { stopArranging(); }
       return true;
     }
     if (key === KEY.BACK) {
