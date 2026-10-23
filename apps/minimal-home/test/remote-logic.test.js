@@ -42,15 +42,17 @@ test("a binding made elsewhere stays on offer as Custom after stepping away from
   const handMade = { action: "exec", command: "echo hi" };
   const apps = [{ id: "netflix", title: "Netflix" }];
   const now = RemoteLogic.choices(apps, handMade, handMade);
-  assert.deepStrictEqual(now.map((choice) => choice.label), ["Normal", "Custom", "Disabled", "Screen on/off", "Open Netflix"]);
+  assert.deepStrictEqual(now.map((choice) => choice.label), ["Normal", "Custom", "Disabled", "Screen on/off",
+    "Acts as Back", "Acts as OK", "Acts as Up", "Acts as Down", "Acts as Left", "Acts as Right", "Acts as Home", "Open Netflix"]);
   const later = RemoteLogic.choices(apps, { action: "ignore" }, handMade);
   assert.strictEqual(later[RemoteLogic.indexOf(later, handMade)].label, "Custom");
-  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 4, "standard bindings add no Custom");
+  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 11, "standard bindings add no Custom");
 });
 
 test("only non-standard bindings are remembered as Custom", () => {
   const apps = [{ id: "netflix", title: "Netflix" }];
-  const binds = { "1": SCREEN, "2": { action: "launch", id: "netflix" }, "3": { action: "launch", id: "removed.app" }, "4": { action: "replace", code: 5 } };
+  const binds = { "1": SCREEN, "2": { action: "launch", id: "netflix" }, "3": { action: "launch", id: "removed.app" },
+    "4": { action: "replace", keycode: 5 }, "5": { action: "replace", keycode: 412 } };
   assert.deepStrictEqual(Object.keys(RemoteLogic.customBinds(binds, apps)), ["3", "4"]);
 });
 
@@ -81,4 +83,44 @@ test("kept buttons can't be added to the Custom remote", () => {
   assert.strictEqual(RemoteLogic.canAdd("28"), false);
   assert.strictEqual(RemoteLogic.canAdd("773"), false);
   assert.strictEqual(RemoteLogic.canAdd("4242"), true);
+});
+
+test("each remote shows its own names, so renaming on Custom leaves the MR24 list alone", () => {
+  const custom = [{ code: "1044", name: "Screen" }];
+  assert.strictEqual(RemoteLogic.displayName("custom", "1044", custom), "Screen");
+  assert.strictEqual(RemoteLogic.displayName("mr24", "1044", custom), "Rakuten TV");
+  assert.strictEqual(RemoteLogic.displayName("mr24", "4242", custom), "Button 4242");
+});
+
+test("arrows move between drawn buttons along rows and columns", () => {
+  const named = (name) => RemoteLogic.MR24.find((button) => button.name === name);
+  const move = (from, direction) => (RemoteLogic.nearestButton(named(from), direction) || { name: null }).name;
+  assert.strictEqual(move("1", "right"), "2");
+  assert.strictEqual(move("1", "down"), "4");
+  assert.strictEqual(move("1", "up"), "Power");
+  assert.strictEqual(move("Power", "up"), null, "top edge");
+  assert.strictEqual(move("1", "left"), null, "left edge");
+  assert.strictEqual(move("0", "down"), "Mute");
+  assert.strictEqual(move("Mic", "down"), "Up");
+  assert.strictEqual(move("Up", "down"), "OK");
+  assert.strictEqual(move("OK", "right"), "Right");
+  assert.strictEqual(move("Back", "down"), "Red");
+  assert.strictEqual(move("Red", "right"), "Green");
+  assert.strictEqual(move("Netflix", "right"), "Prime Video");
+  assert.strictEqual(move("Google Assistant", "down"), null, "bottom edge");
+});
+
+test("another remote's button can act as Back, so that remote can leave pages", () => {
+  const list = RemoteLogic.choices([], null, null);
+  assert.deepStrictEqual(list[RemoteLogic.indexOf(list, { action: "replace", keycode: 412 })].label, "Acts as Back");
+  assert.deepStrictEqual(list[RemoteLogic.indexOf(list, { action: "replace", keycode: 773 })].label, "Acts as Home");
+});
+
+test("pressing one button three times within two seconds stops a test", () => {
+  let result = RemoteLogic.stopStreak(null, "1044", 0);
+  result = RemoteLogic.stopStreak(result.streak, "1044", 600);
+  assert.strictEqual(result.stop, false);
+  assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1044", 1200).stop, true);
+  assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1037", 1200).stop, false, "another button starts over");
+  assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1044", 2700).stop, false, "too slow");
 });

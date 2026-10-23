@@ -1,7 +1,8 @@
 // The Remote buttons view inside Minimal Home: what each remote button does. The list shows the buttons
 // of the chosen remote: the LG MR24 Magic Remote, drawn next to the list (the selected row's button is
-// outlined, and pointing at a drawn button selects its row), or Custom, your own named buttons for
-// anything the MR24 list doesn't cover. The rules live in remote-logic.js.
+// outlined, and choosing a drawn button with the arrows or the pointer opens its row), or Custom, your
+// own named buttons for anything the MR24 list doesn't cover. Each remote shows its own names, while
+// the bindings are shared: the TV sees the same code from either. The rules live in remote-logic.js.
 //
 // The bindings live in LG Input Hook's keybinds.json, which the hook loaded by
 // remote-hook/load-remote-hook.sh reapplies by itself at the next key press after the file changes (see
@@ -10,7 +11,9 @@
 //
 // Test remote lights buttons up as the TV receives them, and Add a button waits for the button to add.
 // Meanwhile every bindable button and Home are disabled so that pressing one does nothing else, and
-// the page ignores other keys; Back (twice for a test) ends it, as does Home going out of sight. The
+// the page ignores other keys. Pressing any button three times quickly ends a test (Back ends adding
+// a button), on any remote since the presses are read from the hook's log; so does Home going out of
+// sight. The
 // real bindings wait in BACKUP and become active again when it ends, or the next time the bindings are
 // read (load) if Home was reloaded or the TV restarted meanwhile.
 var RemoteButtons = (function () {
@@ -32,8 +35,8 @@ var RemoteButtons = (function () {
   var RETRY_MS = [1000, 3000, 10000];
   var POLL_MS = 300;
   var LIT_MS = 900;
-  var BACK_TWICE_MS = 2000;
   var CAPTURE_MS = 15000;
+  var BACK_CODE = "412";
   var REMOTE_KEY = "remote.model";
   var CUSTOM_KEY = "remote.customButtons";
   var REMOTES = [{ id: "mr24", name: "LG MR24" }, { id: "custom", name: "Custom" }];
@@ -44,8 +47,8 @@ var RemoteButtons = (function () {
       "selects its row. Changes take effect right away. Test remote finds a button by pressing it.",
     custom: "Your own buttons, for another remote or buttons the MR24 list lacks. Add one at the end of the " +
       "list, then name or remove it here. Changes take effect right away.",
-    test: "Every button now only lights up, and pressing a listed button selects its row. Press Back twice " +
-      "to stop the test.",
+    test: "Every button now only lights up, and pressing a listed button selects its row. Press any button " +
+      "three times quickly to stop the test.",
     capture: "Press the button to add within 15 seconds. Back cancels."
   };
   var NO_HOOK = "The button hook isn't loaded, so changes have no effect (see Remote button hook in the README)";
@@ -69,7 +72,10 @@ var RemoteButtons = (function () {
   var lastCode = null;
   // "test", "capture" (waiting for a button to add) or null.
   var listening = null;
-  var backPressedAt = 0;
+  // The button pressed last during a test and when, to stop on three quick presses (Logic.stopStreak).
+  var streak = null;
+  // The drawn button the arrows or the pointer are on, while the drawing has the focus.
+  var pointed = null;
   var captureTimer = null;
   // The code being renamed, while the name field is open.
   var renaming = null;
@@ -211,7 +217,7 @@ var RemoteButtons = (function () {
     var name = document.createElement("span");
     name.className = "copy";
     var label = document.createElement("strong");
-    label.textContent = Logic.nameFor(code, custom);
+    label.textContent = Logic.displayName(remote, code, custom);
     var number = document.createElement("small");
     number.textContent = code;
     name.appendChild(label);
@@ -297,6 +303,7 @@ var RemoteButtons = (function () {
       if (button.colour) { element.style.background = button.colour; }
       element.textContent = button.label;
       element.addEventListener("click", function () { pickFromDrawing(button); });
+      element.setAttribute("data-button", button.name);
       drawn.push({ button: button, element: element });
       drawing.appendChild(element);
     });
@@ -307,13 +314,29 @@ var RemoteButtons = (function () {
     return drawn.filter(function (entry) { return entry.button === button; })[0];
   }
 
-  // Pointing at a drawn button and pressing OK selects its row.
+  function entryFor(button) {
+    return drawn.filter(function (entry) { return entry.button === button; })[0];
+  }
+
+  // Moves the drawing's highlight to a drawn button and says what it does.
+  function point(entry) {
+    if (pointed) { pointed.element.classList.remove("is-pointed"); }
+    pointed = entry;
+    if (!entry) { return; }
+    entry.element.classList.add("is-pointed");
+    var button = entry.button;
+    var code = String(button.codes[0]);
+    setStatus(button.power ? "Power never reaches the TV's software, so it can't be changed" :
+      button.keep ? button.name + " stays as it is so the remote remains usable" :
+      button.name + " · " + rowFor(code).querySelector(".value").textContent + " · OK changes it");
+  }
+
+  // OK on a drawn button (or a click on it) opens its row to change what it does.
   function pickFromDrawing(button) {
-    if (listening || renaming !== null) { return; }
-    if (button.power) { setStatus("Power never reaches the TV's software, so it can't be changed"); return; }
-    if (button.keep) { setStatus(button.name + " stays as it is so the remote remains usable"); return; }
-    setFocus(rowFor(String(button.codes[0])));
-    setStatus("");
+    if (listening || renaming !== null || button.power || button.keep) { return; }
+    var row = rowFor(String(button.codes[0]));
+    setFocus(row);
+    startEditing(row);
   }
 
   function light(element) {
@@ -356,10 +379,13 @@ var RemoteButtons = (function () {
 
   // A press seen in the button log while listening.
   function pressed(code) {
+    if (!listening) { return; }
     if (listening === "capture") {
       if (Logic.canAdd(code)) { captured(code); }
       return;
     }
+    var result = Logic.stopStreak(streak, code, Date.now());
+    streak = result.streak;
     if (remote === "custom") {
       showCard(code);
       light($("remote-card"));
@@ -367,11 +393,14 @@ var RemoteButtons = (function () {
       light(drawnFor(code).element);
     }
     var row = rowFor(code);
-    if (row) {
+    if (result.stop) {
+      stopListening("Test stopped");
+      if (row) { setFocus(row); }
+    } else if (row) {
       setFocus(row);
       setStatus("");
     } else if (!Logic.isKept(code) && (remote === "custom" || !drawnFor(code))) {
-      setStatus(Logic.nameFor(code, custom) + " (code " + code + ") is not in the list" +
+      setStatus(Logic.displayName(remote, code, custom) + " (code " + code + ") is not in the list" +
         (remote === "custom" ? " · add it with Add a button" : ""));
     }
   }
@@ -401,7 +430,7 @@ var RemoteButtons = (function () {
   function listen(kind) {
     stopEditing();
     listening = kind;
-    backPressedAt = 0;
+    streak = null;
     showMode();
     setStatus(kind === "test" ? "Press any button on the remote" : "Press the button to add");
     if (kind === "capture") {
@@ -527,7 +556,7 @@ var RemoteButtons = (function () {
   }
 
   function updateHints() {
-    var hints = listening === "test" ? ["", "", "<b>Back twice</b> Stop test"] :
+    var hints = listening === "test" ? ["", "", "<b>Any button 3×</b> Stop test"] :
       listening === "capture" ? ["", "", "<b>Back</b> Cancel"] :
       renaming !== null ? ["", "<b>OK</b> Save", "<b>Back</b> Cancel"] :
       editing ? ["<b>Left/Right</b> Change", "<b>OK</b> Done", "<b>Back</b> Done"] :
@@ -565,6 +594,15 @@ var RemoteButtons = (function () {
     if (!element) { return; }
     if (editing && element !== editing) { stopEditing(); }
     selected = UI.moveFocus(selected, element);
+    if (element === $("remote-drawing")) {
+      // Enter at the selected row's button.
+      if (!pointed) { point(drawnFor(lastCode) || drawn[1]); }
+      return;
+    }
+    if (pointed) {
+      point(null);
+      setStatus("");
+    }
     if (isSide(element)) { return; }
     lastCode = element.getAttribute("data-code") || "add";
     UI.keepInView(element);
@@ -597,11 +635,8 @@ var RemoteButtons = (function () {
     if (listening) {
       if (key !== KEY.BACK || event.repeat) { return null; }
       if (listening === "capture") { stopListening("Cancelled"); }
-      else if (Date.now() - backPressedAt < BACK_TWICE_MS) { stopListening(""); }
-      else {
-        backPressedAt = Date.now();
-        setStatus("Press Back again to stop the test");
-      }
+      // Presses come from the button log; without the hook, count LG's Back from here instead.
+      else if (!hooked) { pressed(BACK_CODE); }
       return null;
     }
     if (key === KEY.BACK) {
@@ -614,7 +649,10 @@ var RemoteButtons = (function () {
       if (editing === $("remote-model")) { switchRemote(key === KEY.RIGHT ? 1 : -1); }
       else { change(key === KEY.RIGHT ? 1 : -1); }
     } else if (key === KEY.ENTER) {
-      selected.click();
+      if (selected === $("remote-drawing")) { pickFromDrawing(pointed.button); }
+      else { selected.click(); }
+    } else if (selected === $("remote-drawing")) {
+      moveInDrawing(key);
     } else if (isSide(selected)) {
       var items = sideItems();
       var index = items.indexOf(selected);
@@ -622,7 +660,7 @@ var RemoteButtons = (function () {
       else if (key === KEY.DOWN) { setFocus(items[index + 1]); }
       else if (key === KEY.LEFT) { setFocus(rowFor(lastCode) || firstRow()); }
     } else if (key === KEY.RIGHT) {
-      setFocus(sideItems()[0]);
+      setFocus(remote === "mr24" ? $("remote-drawing") : sideItems()[0]);
     } else if (key === KEY.UP) {
       setFocus(selected.previousElementSibling || sideItems()[0]);
     } else if (key === KEY.DOWN) {
@@ -631,12 +669,33 @@ var RemoteButtons = (function () {
     return null;
   }
 
+  // The arrows move between drawn buttons; past the edge they leave the drawing for the button above
+  // or below it, or the list.
+  function moveInDrawing(key) {
+    var direction = key === KEY.UP ? "up" : key === KEY.DOWN ? "down" : key === KEY.LEFT ? "left" : "right";
+    var next = Logic.nearestButton(pointed.button, direction);
+    if (next) {
+      point(entryFor(next));
+      return;
+    }
+    var items = sideItems();
+    var index = items.indexOf(selected);
+    if (direction === "up") { setFocus(items[index - 1]); }
+    else if (direction === "down") { setFocus(items[index + 1]); }
+    else if (direction === "left") { setFocus(rowFor(lastCode) || firstRow()); }
+  }
+
   function handlePointer(event) {
     if (renaming !== null) { return; }
     var element = event.target.closest && event.target.closest("#remote-view .focusable");
     // While listening the list follows the buttons pressed, not the pointer.
     if (listening && element !== $("remote-test")) { return; }
     if (element && element !== selected) { setFocus(element); }
+    var drawnButton = event.target.closest && event.target.closest("#remote-drawing .remote-button");
+    if (drawnButton) {
+      var entry = drawn.filter(function (each) { return each.element === drawnButton; })[0];
+      if (entry !== pointed) { point(entry); }
+    }
   }
 
   // host: Home's apps() (offered as "Open …" actions) and setLinkValue() for the Settings summary.

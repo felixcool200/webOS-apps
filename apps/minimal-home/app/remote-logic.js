@@ -57,6 +57,11 @@ var RemoteLogic = (function () {
   // page, so then it is disabled too.
   var HOME = "773";
   var NAME_LENGTH = 40;
+  // Buttons another remote's buttons can act as, so that remote can work the TV's menus and this page.
+  var ACTS_AS = ["Back", "OK", "Up", "Down", "Left", "Right", "Home"];
+  // A test stops when one button is pressed this many times within STOP_MS, on any remote.
+  var STOP_PRESSES = 3;
+  var STOP_MS = 2000;
 
   function buttonFor(code) {
     return MR24.filter(function (button) { return button.codes.indexOf(Number(code)) >= 0; })[0];
@@ -73,6 +78,29 @@ var RemoteLogic = (function () {
     if (own) { return own.name; }
     var button = buttonFor(code);
     return button ? button.name : "Button " + code;
+  }
+
+  // The name a remote shows for a code: your own names only on the Custom remote, so renaming a
+  // button there leaves the MR24 list as it is.
+  function displayName(remote, code, custom) {
+    return nameFor(code, remote === "custom" ? custom : []);
+  }
+
+  // The drawn MR24 button nearest to `from` in a direction ("up", "down", "left" or "right"), or null
+  // at the edge. Distance across the direction counts double, so moves follow rows and columns.
+  function nearestButton(from, direction) {
+    var best = null;
+    var bestScore = Infinity;
+    MR24.forEach(function (button) {
+      var dx = button.x - from.x;
+      var dy = button.y - from.y;
+      var forward = direction === "right" ? dx : direction === "left" ? -dx : direction === "down" ? dy : -dy;
+      var cross = direction === "left" || direction === "right" ? Math.abs(dy) : Math.abs(dx);
+      if (button === from || forward <= 4) { return; }
+      var score = forward + cross * 2;
+      if (score < bestScore) { bestScore = score; best = button; }
+    });
+    return best;
   }
 
   // The codes a remote lists (`remote` is "mr24" or "custom"): its own buttons in order, then any other
@@ -119,6 +147,10 @@ var RemoteLogic = (function () {
       { label: "Disabled", bind: { action: "ignore" } },
       { label: "Screen on/off", bind: { action: "exec", command: SCREEN_TOGGLE } }
     ];
+    ACTS_AS.forEach(function (name) {
+      var button = MR24.filter(function (entry) { return entry.name === name; })[0];
+      list.push({ label: "Acts as " + name, bind: { action: "replace", keycode: button.codes[0] } });
+    });
     apps.forEach(function (app) {
       list.push({ label: "Open " + (app.title || app.id), bind: { action: "launch", id: app.id } });
     });
@@ -135,6 +167,14 @@ var RemoteLogic = (function () {
       if (indexOf(standard, binds[code]) < 0) { found[code] = binds[code]; }
     });
     return found;
+  }
+
+  // Follows the presses during a test: `streak` is the last button and when it was pressed in a row
+  // (null at first). Returns the new streak and whether it asks to stop the test.
+  function stopStreak(streak, code, now) {
+    var times = streak && streak.code === code ? streak.times.filter(function (time) { return now - time < STOP_MS; }) : [];
+    times = times.concat([now]);
+    return { streak: { code: code, times: times }, stop: times.length >= STOP_PRESSES };
   }
 
   // Reads the poll's output: the codes of presses after `position` (lines), then "#" and the log's
@@ -185,6 +225,7 @@ var RemoteLogic = (function () {
 
   return {
     MR24: MR24, HOME: HOME, SCREEN_TOGGLE: SCREEN_TOGGLE, buttonFor: buttonFor, isKept: isKept, nameFor: nameFor,
+    displayName: displayName, nearestButton: nearestButton, stopStreak: stopStreak, STOP_PRESSES: STOP_PRESSES,
     listedCodes: listedCodes, testCodes: testCodes, disabledBinds: disabledBinds, sameBind: sameBind, indexOf: indexOf,
     choices: choices, customBinds: customBinds, readPresses: readPresses, parseCustom: parseCustom,
     withButton: withButton, withoutButton: withoutButton, canAdd: canAdd
