@@ -183,9 +183,11 @@ test("presets can be renamed, and deleted unless it is the last one", () => {
   assert.strictEqual(RemoteLogic.withoutPreset(presets, "p1"), presets, "the last preset stays");
 });
 
-test("the preset row offers every preset, then new, rename and delete", () => {
+test("the preset row steps through the presets only; the menu acts on the one shown", () => {
   const one = RemoteLogic.parsePresets(null, null, null);
-  assert.deepStrictEqual(RemoteLogic.presetChoices(one).map((choice) => choice.label), ["LG MR24", "New preset…", "Rename this preset…"]);
+  assert.deepStrictEqual(RemoteLogic.presetChoices(one).map((choice) => choice.label), ["LG MR24"]);
+  assert.deepStrictEqual(RemoteLogic.presetActions(one).map((action) => action.label), ["New preset…", "Rename “LG MR24”…"], "no deleting the last one");
   const two = RemoteLogic.withNewPreset(one, "blank", "Living room");
-  assert.deepStrictEqual(RemoteLogic.presetChoices(two).map((choice) => choice.kind), ["preset", "preset", "new", "rename", "delete"]);
+  assert.deepStrictEqual(RemoteLogic.presetChoices(two).map((choice) => choice.label), ["LG MR24", "Living room"]);
+  assert.deepStrictEqual(RemoteLogic.presetActions(two).map((action) => action.label), ["New preset…", "Rename “Living room”…", "Delete “Living room”…"]);
 });

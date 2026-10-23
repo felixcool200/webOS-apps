@@ -311,13 +311,17 @@ var RemoteLogic = (function () {
     return { active: active, list: list };
   }
 
-  // What Left/Right step through on the preset row: every preset, then making a new one, and
-  // renaming or deleting the active one (deleting only when there is another).
+  // What Left/Right step through on the preset row: the presets.
   function presetChoices(presets) {
-    var list = presets.list.map(function (preset) { return { kind: "preset", id: preset.id, label: preset.name }; });
-    list.push({ kind: "new", label: "New preset…" });
-    list.push({ kind: "rename", label: "Rename this preset…" });
-    if (presets.list.length > 1) { list.push({ kind: "delete", label: "Delete this preset…" }); }
+    return presets.list.map(function (preset) { return { kind: "preset", id: preset.id, label: preset.name }; });
+  }
+
+  // The preset menu (the ⋯ button): making a new preset, and renaming or deleting the active one
+  // (deleting only when there is another).
+  function presetActions(presets) {
+    var name = activePreset(presets).name;
+    var list = [{ kind: "new", label: "New preset…" }, { kind: "rename", label: "Rename “" + name + "”…" }];
+    if (presets.list.length > 1) { list.push({ kind: "delete", label: "Delete “" + name + "”…" }); }
     return list;
   }
 
@@ -332,7 +336,7 @@ var RemoteLogic = (function () {
     listedCodes: listedCodes, testCodes: testCodes, disabledBinds: disabledBinds, sameBind: sameBind, indexOf: indexOf,
     choices: choices, defaultBinds: defaultBinds, customBinds: customBinds, TEMPLATES: TEMPLATES, templateName: templateName,
     parsePresets: parsePresets, activePreset: activePreset, withNewPreset: withNewPreset, withPresetRenamed: withPresetRenamed,
-    withoutPreset: withoutPreset, presetChoices: presetChoices, readPresses: readPresses, parseCustom: parseCustom,
+    withoutPreset: withoutPreset, presetChoices: presetChoices, presetActions: presetActions, readPresses: readPresses, parseCustom: parseCustom,
     withButton: withButton, withoutButton: withoutButton, canAdd: canAdd
   };
 }());

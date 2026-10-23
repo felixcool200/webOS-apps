@@ -83,7 +83,11 @@
               <button id="remote-remove" class="remote-action focusable" type="button" hidden>Remove</button>
             </div>
           </div>
-          <button id="remote-model" class="remote-choice focusable" type="button"><span>Preset</span><span class="value"></span></button>
+          <div id="remote-preset-menu" hidden></div>
+          <div id="remote-preset-bar">
+            <button id="remote-model" class="remote-choice focusable" type="button"><span>Preset</span><span class="value"></span></button>
+            <button id="remote-preset-options" class="remote-round focusable" type="button" aria-label="Preset options">⋯</button>
+          </div>
           <input id="remote-preset-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" hidden>
         </div>
         <p class="remote-hint" id="remote-hint"></p>

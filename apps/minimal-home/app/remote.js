@@ -70,11 +70,11 @@ var RemoteButtons = (function () {
   // The active preset's template ("mr24" or "blank") and own named buttons.
   var remote = "mr24";
   var custom = [];
-  // While the preset row is being changed: the choice shown (an index into Logic.presetChoices), and
-  // the step: "choose", "template" (making a new preset) or "delete" (asking first).
+  // While the preset row is being changed: the preset shown (an index into Logic.presetChoices).
   var presetIndex = 0;
-  var presetStep = null;
-  var templateIndex = 0;
+  // While the preset menu (the ⋯ button) is open: its step ("actions", "templates" for a new preset,
+  // or "confirm" before deleting) and the item with the focus.
+  var menu = null;
   var selected = null;
   // The row or the remote choice whose value Left/Right change, entered with OK as in Settings.
   var editing = null;
@@ -311,8 +311,13 @@ var RemoteButtons = (function () {
     });
     $("remote-model").addEventListener("click", function () {
       if (listening) { return; }
-      if (editing === $("remote-model")) { presetOk(); }
+      if (editing === $("remote-model")) { stopEditing(); }
       else { startEditing($("remote-model")); }
+    });
+    $("remote-preset-options").addEventListener("click", function () {
+      if (listening || !fresh) { return; }
+      setFocus($("remote-preset-options"));
+      if (menu) { closeMenu(); } else { openMenu("actions"); }
     });
     $("remote-rename").addEventListener("click", function () {
       if (!listening && lastCode && lastCode !== "add") { startRename(lastCode); }
@@ -587,97 +592,126 @@ var RemoteButtons = (function () {
     scheduleSave();
   }
 
-  // The preset row: its label and the preset, choice, template or question it shows.
   function showPresetRow() {
-    var row = $("remote-model");
-    var label = row.querySelector("span");
-    var value = row.querySelector(".value");
-    var active = Logic.activePreset(presets);
-    label.textContent = presetStep === "template" ? "Template" : "Preset";
-    value.textContent = presetStep === "template" ? Logic.TEMPLATES[templateIndex].name :
-      presetStep === "delete" ? "Delete " + active.name + "?" :
-      presetStep === "choose" ? Logic.presetChoices(presets)[presetIndex].label : active.name;
+    $("remote-model").querySelector(".value").textContent = Logic.activePreset(presets).name;
   }
 
-  // Left/Right on the preset row: step through the presets (each becomes active right away) and the
-  // actions after them, or through the templates when making a new preset.
+  // Left/Right on the preset row: step through the presets; each becomes active right away.
   function stepPreset(step) {
-    if (presetStep === "template") {
-      templateIndex = (templateIndex + step + Logic.TEMPLATES.length) % Logic.TEMPLATES.length;
-      showPresetRow();
-      return;
-    }
     var choices = Logic.presetChoices(presets);
-    presetStep = "choose";
     presetIndex = (presetIndex + step + choices.length) % choices.length;
-    var choice = choices[presetIndex];
-    if (choice.kind === "preset" && choice.id !== presets.active) { activatePreset(choice.id); }
+    if (choices[presetIndex].id !== presets.active) { activatePreset(choices[presetIndex].id); }
     showPresetRow();
-    var name = Logic.activePreset(presets).name;
-    setStatus(choice.kind === "new" ? "OK makes a new preset from a template" :
-      choice.kind === "rename" ? "OK renames " + name : choice.kind === "delete" ? "OK deletes " + name + " (it asks first)" :
-      "Using " + name + " · Left/Right changes the preset");
+    setStatus("Using " + Logic.activePreset(presets).name + " · Left/Right changes the preset");
   }
 
+  // Asks for a preset's name in the preset row's place.
   function namePreset(value, done) {
-    $("remote-model").hidden = true;
+    $("remote-preset-bar").hidden = true;
     startNaming($("remote-preset-name"), value, function (keep, name) {
-      $("remote-model").hidden = false;
-      done(keep, name);
+      $("remote-preset-bar").hidden = false;
+      if (keep) { done(name); } else { setStatus(""); }
       showRemote();
       updateSummary();
       setFocus($("remote-model"));
     });
   }
 
-  // OK on the preset row while changing it: does what the row shows.
-  function presetOk() {
+  // The preset menu's items for its step.
+  function menuItems() {
+    var name = Logic.activePreset(presets).name;
+    if (menu.step === "templates") {
+      return Logic.TEMPLATES.map(function (template) { return { kind: "template", id: template.id, label: "From " + template.name }; });
+    }
+    if (menu.step === "confirm") {
+      return [{ kind: "confirm", label: "Delete “" + name + "”" }, { kind: "cancel", label: "Keep it" }];
+    }
+    return Logic.presetActions(presets);
+  }
+
+  function showMenu() {
+    var box = $("remote-preset-menu");
+    box.hidden = !menu;
+    box.textContent = "";
+    if (menu) {
+      menuItems().forEach(function (item, index) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "menu-item" + (index === menu.index ? " is-focused" : "") + (item.kind === "confirm" ? " is-danger" : "");
+        row.textContent = item.label;
+        row.addEventListener("click", function () {
+          menu.index = index;
+          runMenuItem();
+        });
+        row.addEventListener("mousemove", function () {
+          if (!menu || menu.index === index) { return; }
+          menu.index = index;
+          Array.prototype.forEach.call(box.children, function (child, childIndex) { child.classList.toggle("is-focused", childIndex === index); });
+        });
+        box.appendChild(row);
+      });
+    }
+    updateHints();
+  }
+
+  function openMenu(step) {
+    stopEditing();
+    menu = { step: step, index: 0 };
+    showMenu();
+    setStatus(step === "confirm" ? "Deleting " + Logic.activePreset(presets).name + " can't be undone" : "");
+  }
+
+  function closeMenu() {
+    menu = null;
+    showMenu();
+  }
+
+  // OK on a menu item.
+  function runMenuItem() {
+    var item = menuItems()[menu.index];
     var active = Logic.activePreset(presets);
-    if (presetStep === "template") {
-      var template = Logic.TEMPLATES[templateIndex];
-      namePreset(template.id === "mr24" ? "My " + template.name : "My remote", function (keep, name) {
-        if (!keep) {
-          setStatus("");
-          return;
-        }
-        presets = Logic.withNewPreset(presets, template.id, name);
+    if (item.kind === "new") {
+      openMenu("templates");
+    } else if (item.kind === "template") {
+      closeMenu();
+      namePreset(item.id === "mr24" ? "My " + Logic.templateName("mr24") : "My remote", function (name) {
+        presets = Logic.withNewPreset(presets, item.id, name);
         activatePreset(presets.active);
         setStatus("Made " + Logic.activePreset(presets).name, "ok");
       });
-      return;
-    }
-    if (presetStep === "delete") {
-      presets = Logic.withoutPreset(presets, active.id);
-      activatePreset(presets.active);
-      presetStep = "choose";
-      presetIndex = Logic.presetChoices(presets).map(function (choice) { return choice.id; }).indexOf(presets.active);
-      showPresetRow();
-      setStatus("Deleted " + active.name + " · using " + Logic.activePreset(presets).name);
-      return;
-    }
-    var choice = Logic.presetChoices(presets)[presetIndex];
-    if (choice.kind === "new") {
-      presetStep = "template";
-      templateIndex = 0;
-      showPresetRow();
-      setStatus("Choose a template · Left/Right changes · OK names the preset");
-    } else if (choice.kind === "rename") {
-      namePreset(active.name, function (keep, name) {
-        if (!keep) {
-          setStatus("");
-          return;
-        }
+    } else if (item.kind === "rename") {
+      closeMenu();
+      namePreset(active.name, function (name) {
         presets = Logic.withPresetRenamed(presets, active.id, name);
         storePresets();
         usePreset();
         setStatus("Renamed to " + Logic.activePreset(presets).name, "ok");
       });
-    } else if (choice.kind === "delete") {
-      presetStep = "delete";
-      showPresetRow();
-      setStatus("OK deletes " + active.name + " · Left/Right or Back keeps it");
+    } else if (item.kind === "delete") {
+      openMenu("confirm");
+    } else if (item.kind === "confirm") {
+      closeMenu();
+      presets = Logic.withoutPreset(presets, active.id);
+      activatePreset(presets.active);
+      setFocus($("remote-preset-options"));
+      setStatus("Deleted " + active.name + " · using " + Logic.activePreset(presets).name);
     } else {
-      stopEditing();
+      closeMenu();
+      setStatus("");
+    }
+  }
+
+  // Keys while the menu is open: Up/Down choose, OK runs, Back goes a step back or closes it.
+  function menuKey(key, repeat) {
+    var count = menuItems().length;
+    if (key === KEY.UP || key === KEY.DOWN) {
+      menu.index = Math.max(0, Math.min(count - 1, menu.index + (key === KEY.DOWN ? 1 : -1)));
+      showMenu();
+    } else if (key === KEY.ENTER && !repeat) {
+      runMenuItem();
+    } else if (key === KEY.BACK) {
+      if (menu.step === "actions") { closeMenu(); } else { openMenu("actions"); }
+      setStatus("");
     }
   }
 
@@ -685,10 +719,10 @@ var RemoteButtons = (function () {
     return !!element && !!element.closest && !!element.closest(".remote-stage");
   }
 
-  // The buttons beside the list, top to bottom.
+  // The buttons beside the list, top to bottom (the ⋯ button counts as part of the preset row).
   function sideItems() {
     return Array.prototype.filter.call(document.querySelectorAll(".remote-stage .focusable"), function (element) {
-      return !element.hidden && !element.closest("[hidden]");
+      return !element.hidden && !element.closest("[hidden]") && element.id !== "remote-preset-options";
     });
   }
 
@@ -706,6 +740,7 @@ var RemoteButtons = (function () {
     var hints = listening === "test" ? ["", "", "<b>Any button 3×</b> Stop test"] :
       listening === "capture" ? ["", "", "<b>Back</b> Cancel"] :
       naming ? ["", "<b>OK</b> Save", "<b>Back</b> Cancel"] :
+      menu ? ["<b>Up/Down</b> Choose", "<b>OK</b> Select", "<b>Back</b> Close"] :
       editing ? ["<b>Left/Right</b> Change", "<b>OK</b> Done", "<b>Back</b> Done"] :
       ["<b>Arrows</b> Move", "<b>OK</b> Select", "<b>Back</b> Settings"];
     ["move", "select", "back"].forEach(function (name, index) {
@@ -726,9 +761,7 @@ var RemoteButtons = (function () {
     editing = element;
     element.classList.add("is-editing");
     if (element === $("remote-model")) {
-      presetStep = "choose";
       presetIndex = Logic.presetChoices(presets).map(function (choice) { return choice.id; }).indexOf(presets.active);
-      showPresetRow();
     }
     updateHints();
     setStatus(element === $("remote-model") ? "Using " + Logic.activePreset(presets).name + " · Left/Right changes the preset" :
@@ -737,13 +770,8 @@ var RemoteButtons = (function () {
 
   function stopEditing() {
     if (!editing) { return; }
-    var wasPresetRow = editing === $("remote-model");
     editing.classList.remove("is-editing");
     editing = null;
-    if (wasPresetRow) {
-      presetStep = null;
-      showPresetRow();
-    }
     updateHints();
     setStatus("");
   }
@@ -751,6 +779,7 @@ var RemoteButtons = (function () {
   function setFocus(element) {
     if (!element) { return; }
     if (editing && element !== editing) { stopEditing(); }
+    if (menu && element !== $("remote-preset-options")) { closeMenu(); }
     var fromList = !!selected && !isSide(selected);
     selected = UI.moveFocus(selected, element);
     if (element === $("remote-drawing")) {
@@ -792,6 +821,10 @@ var RemoteButtons = (function () {
       return null;
     }
     event.preventDefault();
+    if (menu) {
+      menuKey(key, event.repeat);
+      return null;
+    }
     if (listening) {
       if (key !== KEY.BACK || event.repeat) { return null; }
       if (listening === "capture") { stopListening("Cancelled"); }
@@ -813,9 +846,14 @@ var RemoteButtons = (function () {
       else { selected.click(); }
     } else if (selected === $("remote-drawing")) {
       moveInDrawing(key);
+    } else if (selected === $("remote-model") && key === KEY.RIGHT) {
+      setFocus($("remote-preset-options"));
+    } else if (selected === $("remote-preset-options") && key === KEY.LEFT) {
+      setFocus($("remote-model"));
     } else if (isSide(selected)) {
+      // The ⋯ button shares the preset row's place in the column.
       var items = sideItems();
-      var index = items.indexOf(selected);
+      var index = items.indexOf(selected === $("remote-preset-options") ? $("remote-model") : selected);
       if (key === KEY.UP) { setFocus(items[index - 1]); }
       else if (key === KEY.DOWN) { setFocus(items[index + 1]); }
       else if (key === KEY.LEFT) { setFocus(rowFor(lastCode) || firstRow()); }
@@ -880,7 +918,8 @@ var RemoteButtons = (function () {
     usePreset();
     listening = null;
     naming = null;
-    presetStep = null;
+    menu = null;
+    showMenu();
     fresh = false;
     point(null);
     lastPointed = null;
@@ -901,6 +940,7 @@ var RemoteButtons = (function () {
   // Ends a test and saves pending changes. Returns when the bindings are in place.
   function close() {
     finishNaming(true);
+    closeMenu();
     return listening ? stopListening("") : queue(flush);
   }
 
