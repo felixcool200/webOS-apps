@@ -40,8 +40,10 @@
   // Settings values are read this long after Home is on screen, so they are ready when the Settings
   // view opens without competing with the app list.
   var SETTINGS_PRELOAD_DELAY_MS = 1000;
-  // Holding OK (or the pointer button) on a tile this long picks it up for edit mode.
+  // Holding OK (or the pointer button) on a tile this long starts arranging with it picked up.
   var HOLD_MS = 600;
+  // Arranging ends by itself after this long with nothing picked up, so Home isn't left in it.
+  var ARRANGE_IDLE_MS = 20000;
   var ORDER_KEY = "home.appOrder";
   var HIDDEN_KEY = "home.hiddenApps";
   var TOOLS_KEY = "home.toolApps";
@@ -64,6 +66,7 @@
   // picked up (its id) moves with the arrows.
   var arranging = false;
   var pickedId = null;
+  var idleTimer = null;
   // Each app's tile, made once and then moved around, so redrawing the rows never reloads an icon
   // (it would flash the initials until the image is back).
   var tiles = {};
@@ -269,12 +272,16 @@
     }, HOLD_MS);
   }
 
+  // The banner while arranging, and the timer that ends arranging when nothing happens.
   function showEditHint() {
     var hint = document.getElementById("edit-hint");
     hint.hidden = !arranging;
+    document.getElementById("home-view").classList.toggle("is-arranging", arranging);
     var picked = installed.filter(function (app) { return app.id === pickedId; })[0];
     hint.textContent = picked ? "Moving " + (picked.title || picked.id) + " · Arrows move it · Down to Hidden hides it · OK puts it down" :
-      "OK picks an app up · Back finishes";
+      "Arranging apps · OK picks one up · Back when done";
+    window.clearTimeout(idleTimer);
+    if (arranging && !pickedId) { idleTimer = window.setTimeout(stopArranging, ARRANGE_IDLE_MS); }
   }
 
   function startArranging() {
@@ -330,6 +337,7 @@
   // Keys while arranging. Returns true when the key was used.
   function arrangeKey(event) {
     var key = event.keyCode;
+    showEditHint();
     var directions = {};
     directions[KEY.LEFT] = "left";
     directions[KEY.RIGHT] = "right";

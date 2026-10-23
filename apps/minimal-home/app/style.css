@@ -32,7 +32,28 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .date { color: var(--muted); font-size: 2vh; }
 .view-name { margin: 0.6vh 0 0; color: var(--muted); font-size: 2.4vh; font-weight: 600; }
 .view-hint { margin: 0 0 2.2vh; color: var(--muted); font-size: 1.9vh; }
-#edit-hint { margin: 1vh 0 0; color: var(--accent); font-size: 1.9vh; }
+/* The banner while arranging: an accent bar in the header, so the mode can't be missed. */
+#edit-hint {
+  margin: 0.4vh 0 0;
+  padding: 1.1vh 1.6vw;
+  border-radius: 3vh;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 1.8vh;
+  font-weight: 700;
+  box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.35);
+}
+
+/* While arranging, the tiles rock gently, like a phone's home screen in edit mode. The separate
+   rotate property leaves the focus and lift transforms alone. */
+@keyframes arrange-wiggle {
+  0%, 100% { rotate: -0.9deg; }
+  50% { rotate: 0.9deg; }
+}
+
+#home-view.is-arranging .app:not(.is-editing) { animation: arrange-wiggle 0.36s ease-in-out infinite; }
+#home-view.is-arranging .app:nth-child(2n):not(.is-editing) { animation-delay: -0.18s; }
+#home-view.is-arranging .app:nth-child(3n):not(.is-editing) { animation-duration: 0.42s; }
 
 .grid-view nav { display: flex; align-items: center; gap: 0.8vw; }
 
