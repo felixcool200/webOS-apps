@@ -4,11 +4,13 @@ Small, fast applications for a rooted LG webOS TV.
 
 ## Apps
 
-- **Minimal Home 0.1.7** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
-- **Minimal Settings 0.3.4** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
-- **Departures 0.2.0** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
+- **Minimal Home** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
+- **Minimal Settings** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
+- **Departures** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
 
 All apps are plain webOS web applications. Privileged operations use the root execution service supplied by [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
+
+Each app's version is in its `app/appinfo.json` and `package.json`.
 
 ## Repository layout
 
@@ -16,66 +18,62 @@ All apps are plain webOS web applications. Privileged operations use the root ex
 apps/departures/
 apps/minimal-home/
 apps/minimal-settings/
+scripts/deploy.sh    package, install and launch an app on the TV
 ```
 
 Each app has its own `package.json` and can be packaged with:
 
 ```sh
-cd apps/minimal-home   # or apps/minimal-settings
+cd apps/minimal-home   # or any other app
 npm install
 npm run package
 ```
 
-The resulting IPK is written to that app's `dist/` directory.
+The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
 
-Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest.
+Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest. Do not publish a Departures IPK built with a Trafiklab key; see its README.
 
 ## Install on a rooted TV
 
-The following example uses root SSH. Replace `TV_ADDRESS` and the key path with your own values.
-
-Build both packages:
+Copy `.env.example` to `.env` and fill in the TV's address and the name of your SSH key in `~/.ssh`. `.env` is gitignored.
 
 ```sh
-(cd apps/minimal-settings && npm install && npm run package)
-(cd apps/minimal-home && npm install && npm run package)
+TV_HOST=TV_ADDRESS
+TV_SSH_KEY=tv_key
 ```
 
-Upload and install Minimal Settings first:
+Install Minimal Settings before Minimal Home, because Home's Settings button opens it:
 
 ```sh
-ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  'cat > /tmp/org.webosbrew.minimalsettings_0.3.4_all.ipk' \
-  < apps/minimal-settings/dist/org.webosbrew.minimalsettings_0.3.4_all.ipk
-
-ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  "luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
-  '{\"id\":\"org.webosbrew.minimalsettings\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalsettings_0.3.4_all.ipk\",\"subscribe\":true}'"
+scripts/deploy.sh apps/minimal-settings
+scripts/deploy.sh apps/minimal-home
+scripts/deploy.sh apps/departures
 ```
 
-Then upload and install Minimal Home:
+`deploy.sh` runs `npm install` if needed, packages the app, uploads and installs it over root SSH, waits until the TV reports the new version, and launches it. Pass `--no-launch` to skip the launch. For Minimal Home it also handles the Home redirect described under "Upgrade Minimal Home safely".
+
+### Manual install
+
+Without the script, upload and install one app at a time. `<version>` is the version in the app's `app/appinfo.json`:
 
 ```sh
-ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  'cat > /tmp/org.webosbrew.minimalhome_0.1.7_all.ipk' \
-  < apps/minimal-home/dist/org.webosbrew.minimalhome_0.1.7_all.ipk
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS 'cat > /tmp/app.ipk' \
+  < apps/minimal-settings/dist/org.webosbrew.minimalsettings_<version>_all.ipk
 
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  "luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
-  '{\"id\":\"org.webosbrew.minimalhome\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalhome_0.1.7_all.ipk\",\"subscribe\":true}'"
+  "exec </dev/null; luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
+  '{\"id\":\"org.webosbrew.minimalsettings\",\"ipkUrl\":\"/tmp/app.ipk\",\"subscribe\":true}'"
 ```
 
-Verify both versions before changing the Home app:
+Check the installed version, then remove the uploaded file:
 
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  "luna-send -n 1 -f 'luna://com.webos.service.applicationmanager/getAppInfo' \
-  '{\"id\":\"org.webosbrew.minimalsettings\"}'"
-
-ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  "luna-send -n 1 -f 'luna://com.webos.service.applicationmanager/getAppInfo' \
-  '{\"id\":\"org.webosbrew.minimalhome\"}'"
+  "exec </dev/null; luna-send -n 1 -f 'luna://com.webos.service.applicationmanager/getAppInfo' \
+  '{\"id\":\"org.webosbrew.minimalsettings\"}' | grep version; rm -f /tmp/app.ipk"
 ```
+
+`exec </dev/null` matters when these commands run from a script: without it `luna-send` can exit with no output before the TV replies.
 
 ## Make Minimal Home the default
 
@@ -103,7 +101,7 @@ The screen may briefly go black while the webOS application manager restarts. Pr
 
 ## Upgrade Minimal Home safely
 
-The redirect source lives inside the installed Minimal Home directory. Unmount the active redirect before replacing the app, then reactivate it after installation:
+The redirect source lives inside the installed Minimal Home directory, so the active redirect must be unmounted before the app is replaced and reactivated afterwards. `scripts/deploy.sh apps/minimal-home` does this when the redirect is active. By hand:
 
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \

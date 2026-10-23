@@ -60,14 +60,14 @@ The TV's shell is busybox `sh`: no bashisms such as `PIPESTATUS`, and limited `l
    - For luna and root calls, copy `lunaCall`, `rootExec` and `rootLuna` from `apps/minimal-settings/app/app.js`. Use `rootLuna` for anything that needs root (launching apps, settings writes).
    - Listen for `webOSRelaunch` to refresh state when the app is reopened.
    - Fullscreen layout sized for 1920x1080, `overflow: hidden`, colour tokens on `:root` as in the existing `style.css`.
-5. Run `npm install` in the app directory, then add the app with its version to the Apps list in the root `README.md`.
+5. Run `npm install` in the app directory, then add the app to the Apps list in the root `README.md`. Leave out the version: versions live only in `package.json` and `appinfo.json`.
 
 ## Deploy
 
-A new app starts at `0.1.0`. Before redeploying an app that is already installed, bump the patch version in `package.json`, `appinfo.json` and the root README. With an unchanged version, the install check passes before the install has finished. Then run from the repo root:
+A new app starts at `0.1.0`. Before redeploying an app that is already installed, bump the patch version in `package.json` and `appinfo.json` (the script refuses to run if they differ). With an unchanged version, the install check passes before the install has finished. Then run from the repo root:
 
 ```sh
-.claude/skills/webos-tv-app/scripts/deploy.sh apps/<name>
+scripts/deploy.sh apps/<name>
 ```
 
 The script reads `.env`, packages the app, uploads the IPK, installs it, waits until the TV reports the new version, then relaunches the app. Pass `--no-launch` to skip the relaunch. The `requiredACG` warning from `ares-package` is harmless for these local installs.

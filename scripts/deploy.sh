@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Package an app under apps/ and install it on the TV configured in .env.
-# Usage: deploy.sh apps/<name> [--no-launch]
+# Usage: scripts/deploy.sh apps/<name> [--no-launch]
 set -euo pipefail
 
-usage="usage: deploy.sh apps/<name> [--no-launch]"
+usage="usage: scripts/deploy.sh apps/<name> [--no-launch]"
 app_dir=${1:?$usage}
 launch=1
 [ "${2:-}" = "--no-launch" ] && launch=0
@@ -56,7 +56,7 @@ done
 tv "rm -f /tmp/$ipk"
 if [ "$installed" != 1 ]; then
   if [ -z "$reply" ]; then
-    echo "No reply from the TV's app manager. Stop and ask the user (see SKILL.md)." >&2
+    echo "No reply from the TV's app manager. Stop and ask the user (see .claude/skills/webos-tv-app/SKILL.md)." >&2
   else
     echo "TV did not report $id $version after 30 s. Last reply:" >&2
     echo "$reply" | grep -E '"version"|errorText' >&2 || true
