@@ -89,3 +89,14 @@ test("saving a layout keeps tools and hidden apps that aren't installed now", ()
     order: ["yt", "nf", "sr", "hb"], tools: ["hb", "old.tool"], hidden: ["alexa", "camera", "gone.app"]
   });
 });
+
+test("arranging moves an app a line at a time within a section before leaving it", () => {
+  // Three apps to a line: a b c / d e, then Tools t1 t2.
+  const columns = { apps: 3, tools: 4, hidden: 4 };
+  const grid = () => ({ apps: ["a", "b", "c", "d", "e"], tools: ["t1", "t2"], hidden: ["h1"] });
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "b", "down", columns).apps, ["a", "c", "d", "e", "b"], "b goes to the second line");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "e", "down", columns).tools, ["t1", "e", "t2"], "from the last line into Tools, same column");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "e", "up", columns).apps, ["a", "e", "b", "c", "d"], "up a line");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "t2", "up", columns).apps, ["a", "b", "c", "d", "t2", "e"], "into the apps' last line");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "a", "up", columns), grid(), "nothing above the first line");
+});

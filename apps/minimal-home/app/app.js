@@ -306,10 +306,17 @@
     showEditHint();
   }
 
+  // How many apps a row shows per line, from its grid's columns.
+  function columnsOf(rowId) {
+    var tracks = window.getComputedStyle(document.getElementById(rowId)).gridTemplateColumns;
+    return tracks && tracks !== "none" ? tracks.split(" ").length : Infinity;
+  }
+
   // Moves the app picked up one step and saves where every app now is.
   function movePicked(direction) {
     var layout = currentLayout();
-    var next = HomeLogic.moveInLayout(layout, pickedId, direction);
+    var next = HomeLogic.moveInLayout(layout, pickedId, direction,
+      { apps: columnsOf("apps"), tools: columnsOf("tools"), hidden: columnsOf("hidden-row") });
     if (next === layout) { return; }
     var lists = HomeLogic.savedLists(next, readList(TOOLS_KEY, DEFAULT_TOOLS), readList(HIDDEN_KEY, DEFAULT_HIDDEN),
       installed.map(function (app) { return app.id; }));

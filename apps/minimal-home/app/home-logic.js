@@ -41,10 +41,18 @@ var HomeLogic = (function () {
   // The rows while arranging, top to bottom; Hidden only shows then.
   var ROWS = ["apps", "tools", "hidden"];
 
-  // Moves app `id` one step in a layout ({ apps, tools, hidden }: the ids as shown). Left and right
-  // swap it with its neighbour; up and down move it to the row above or below, at the same place or at
-  // the end. Returns a new layout, or the same one when the app can't move that way.
-  function moveInLayout(layout, id, direction) {
+  // Where the last line of a section of `length` apps starts, with `width` apps to a line.
+  function lastLineStart(length, width) {
+    return length && isFinite(width) ? Math.floor((length - 1) / width) * width : 0;
+  }
+
+  // Moves app `id` one step in a layout ({ apps, tools, hidden }: the ids as shown). `columns` gives
+  // each section's apps per line on screen (one line if left out). Left and right swap it with its
+  // neighbour. Up and down move it a line within its section, and from the section's first or last
+  // line into the section above or below, at the same column (its last line going up, its first going
+  // down). Returns a new layout, or the same one when the app can't move that way.
+  function moveInLayout(layout, id, direction, columns) {
+    function width(name) { return (columns && columns[name]) || Infinity; }
     var row = ROWS.filter(function (name) { return layout[name].indexOf(id) >= 0; })[0];
     if (!row) { return layout; }
     var next = { apps: layout.apps.slice(), tools: layout.tools.slice(), hidden: layout.hidden.slice() };
@@ -57,11 +65,26 @@ var HomeLogic = (function () {
       list.splice(target, 0, id);
       return next;
     }
+    var column = index % width(row);
+    var lineStart = index - column;
+    if (direction === "down" && lineStart + width(row) < list.length) {
+      var below = Math.min(index + width(row), list.length - 1);
+      list.splice(index, 1);
+      list.splice(below, 0, id);
+      return next;
+    }
+    if (direction === "up" && lineStart > 0) {
+      list.splice(index, 1);
+      list.splice(index - width(row), 0, id);
+      return next;
+    }
     var rowIndex = ROWS.indexOf(row) + (direction === "down" ? 1 : -1);
     if (rowIndex < 0 || rowIndex >= ROWS.length) { return layout; }
     list.splice(index, 1);
-    var into = next[ROWS[rowIndex]];
-    into.splice(Math.min(index, into.length), 0, id);
+    var name = ROWS[rowIndex];
+    var into = next[name];
+    var start = direction === "down" ? 0 : lastLineStart(into.length, width(name));
+    into.splice(Math.min(start + column, into.length), 0, id);
     return next;
   }
 
