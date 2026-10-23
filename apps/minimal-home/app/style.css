@@ -73,7 +73,17 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 }
 
 .grid::-webkit-scrollbar { display: none; }
-#hidden-apps { flex: 1; min-height: 0; }
+/* The Hidden row while arranging: a box of dimmed apps that are hidden from Home. */
+#hidden-section {
+  margin-top: 2vh;
+  padding: 1.4vh 1.2vw 0.6vh;
+  border: 0.2vh dashed rgba(255, 255, 255, 0.22);
+  border-radius: 1.5vh;
+}
+
+#hidden-row .app > * { opacity: 0.55; }
+#hidden-row .app.is-focused > * { opacity: 0.85; }
+#hidden-empty { margin: 0 0 1.2vh; color: var(--muted); font-size: 1.5vh; }
 
 .app {
   position: relative;

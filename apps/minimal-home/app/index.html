@@ -13,7 +13,7 @@
   <main id="home-view" class="grid-view">
     <header>
       <div class="time"><span class="clock"></span><span class="date"></span></div>
-      <p id="edit-hint" hidden>Left/Right moves · Down moves between the rows · Up hides · OK puts it down</p>
+      <p id="edit-hint" hidden></p>
       <nav aria-label="System">
         <button class="top-action focusable" id="sources-button" type="button" aria-label="Sources">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5h18v11.5H3zM8.5 20h7M12 7.5v5.5M9.2 10.5 12 13.3l2.8-2.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -34,15 +34,13 @@
       <h2 id="tools-heading">Tools</h2>
       <div id="tools" class="grid small" role="list"></div>
     </section>
-  </main>
 
-  <main id="hidden-view" class="grid-view" hidden>
-    <header>
-      <div class="time"><span class="clock"></span><span class="date"></span></div>
-      <p class="view-name">Hidden apps</p>
-    </header>
-    <p class="view-hint">OK shows an app again · Back returns Home</p>
-    <div id="hidden-apps" class="grid" role="list"></div>
+    <!-- Shown only while arranging: apps moved down here are hidden. -->
+    <section id="hidden-section" class="tools-section" aria-labelledby="hidden-heading" hidden>
+      <h2 id="hidden-heading">Hidden</h2>
+      <div id="hidden-row" class="grid small" role="list"></div>
+      <p id="hidden-empty">Move an app down here to hide it</p>
+    </section>
   </main>
 
   <main id="sources-view" class="grid-view" hidden>

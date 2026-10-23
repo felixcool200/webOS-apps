@@ -38,6 +38,45 @@ var HomeLogic = (function () {
       .sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
   }
 
+  // The rows while arranging, top to bottom; Hidden only shows then.
+  var ROWS = ["apps", "tools", "hidden"];
+
+  // Moves app `id` one step in a layout ({ apps, tools, hidden }: the ids as shown). Left and right
+  // swap it with its neighbour (not in Hidden, which is sorted by title); up and down move it to the
+  // row above or below, at the same place or at the end. Returns a new layout, or the same one when the
+  // app can't move that way.
+  function moveInLayout(layout, id, direction) {
+    var row = ROWS.filter(function (name) { return layout[name].indexOf(id) >= 0; })[0];
+    if (!row) { return layout; }
+    var next = { apps: layout.apps.slice(), tools: layout.tools.slice(), hidden: layout.hidden.slice() };
+    var list = next[row];
+    var index = list.indexOf(id);
+    if (direction === "left" || direction === "right") {
+      var target = index + (direction === "right" ? 1 : -1);
+      if (row === "hidden" || target < 0 || target >= list.length) { return layout; }
+      list.splice(index, 1);
+      list.splice(target, 0, id);
+      return next;
+    }
+    var rowIndex = ROWS.indexOf(row) + (direction === "down" ? 1 : -1);
+    if (rowIndex < 0 || rowIndex >= ROWS.length) { return layout; }
+    list.splice(index, 1);
+    var into = next[ROWS[rowIndex]];
+    into.splice(Math.min(index, into.length), 0, id);
+    return next;
+  }
+
+  // The lists to save for a layout. Tools and hidden apps that aren't installed now stay in their
+  // lists, so they are back in place if reinstalled.
+  function savedLists(layout, previousTools, previousHidden, installedIds) {
+    function absent(id) { return installedIds.indexOf(id) < 0; }
+    return {
+      order: layout.apps.concat(layout.tools),
+      tools: layout.tools.concat(previousTools.filter(absent)),
+      hidden: layout.hidden.concat(previousHidden.filter(absent))
+    };
+  }
+
   // A saved list (JSON text), or a copy of the fallback when nothing valid was saved.
   function parseList(text, fallback) {
     try {
@@ -48,7 +87,10 @@ var HomeLogic = (function () {
     }
   }
 
-  return { sortInstalled: sortInstalled, arrange: arrange, hiddenApps: hiddenApps, parseList: parseList };
+  return {
+    sortInstalled: sortInstalled, arrange: arrange, hiddenApps: hiddenApps, moveInLayout: moveInLayout,
+    savedLists: savedLists, parseList: parseList
+  };
 }());
 
 if (typeof module !== "undefined") { module.exports = HomeLogic; }

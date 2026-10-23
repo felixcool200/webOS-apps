@@ -62,3 +62,30 @@ test("stepping a setting stays within its range or list", () => {
   assert.strictEqual(SettingsLogic.nextValue(choice, { value: "a", values: [] }, 1), undefined);
   assert.strictEqual(SettingsLogic.nextValue(choice, undefined, 1), undefined);
 });
+
+const layout = () => ({ apps: ["yt", "nf", "sr"], tools: ["hb"], hidden: ["alexa", "camera"] });
+
+test("arranging moves an app along its row, not past either end", () => {
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "nf", "right").apps, ["yt", "sr", "nf"]);
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "nf", "left").apps, ["nf", "yt", "sr"]);
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "sr", "right"), layout());
+});
+
+test("arranging moves an app down into Tools and then into Hidden, and back up", () => {
+  let next = HomeLogic.moveInLayout(layout(), "nf", "down");
+  assert.deepStrictEqual([next.apps, next.tools], [["yt", "sr"], ["hb", "nf"]]);
+  next = HomeLogic.moveInLayout(next, "nf", "down");
+  assert.deepStrictEqual([next.tools, next.hidden], [["hb"], ["alexa", "nf", "camera"]]);
+  next = HomeLogic.moveInLayout(next, "camera", "up");
+  assert.deepStrictEqual(next.tools, ["hb", "camera"]);
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "yt", "up"), layout(), "nothing above the apps");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "alexa", "down"), layout(), "nothing below Hidden");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "alexa", "right"), layout(), "Hidden is sorted by title");
+});
+
+test("saving a layout keeps tools and hidden apps that aren't installed now", () => {
+  const lists = HomeLogic.savedLists(layout(), ["hb", "old.tool"], ["alexa", "gone.app"], ["yt", "nf", "sr", "hb", "alexa", "camera"]);
+  assert.deepStrictEqual(lists, {
+    order: ["yt", "nf", "sr", "hb"], tools: ["hb", "old.tool"], hidden: ["alexa", "camera", "gone.app"]
+  });
+});

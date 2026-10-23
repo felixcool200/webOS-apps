@@ -1,12 +1,12 @@
-// Minimal Home: the app grid, Hidden apps, and the page's views. It runs Home and Hidden apps itself
-// and hands the Settings and Remote buttons views to settings.js and remote.js (see VIEWS). It is the
-// last script, so the other modules are there when it starts.
+// Minimal Home: the app grid with its arranging mode, and the page's views. It runs Home itself and
+// hands the other views to their modules (see VIEWS). It is the last script, so the other modules are
+// there when it starts.
 (function () {
   "use strict";
 
   var APP_ID = WebOS.HOME_ID;
   var APP_DIR = "/media/developer/apps/usr/palm/applications/" + APP_ID;
-  // Starting contents of the hidden list and the Tools row. Edit mode changes them, and the result is
+  // Starting contents of the hidden list and the Tools row. Arranging changes them, and the result is
   // saved on the TV, so these only apply until the first change.
   var DEFAULT_HIDDEN = [
     "amazon.alexa.view",
@@ -53,14 +53,16 @@
   // once at start.
   var VIEWS = {
     home: { back: null },
-    hidden: { back: "home", from: "hidden-tile" },
     sources: { back: "home", from: "sources-button", module: Sources },
     settings: { back: "home", from: "settings", module: MinimalSettings },
     remote: { back: "settings", from: "settings", module: RemoteButtons }
   };
   var view = "home";
   var installed = [];
-  var editing = null;
+  // Arranging: the Hidden row shows, OK picks an app up and puts it down, and Back finishes. The app
+  // picked up (its id) moves with the arrows.
+  var arranging = false;
+  var pickedId = null;
   var holdTimer = null;
   var suppressClick = false;
   // Set while the OK press that picked a tile up is still held, so its repeats don't put it down.
@@ -156,16 +158,19 @@
   function makeHomeTile(app) {
     var tile = makeTile(app, function () {
       if (suppressClick) { suppressClick = false; return; }
-      if (editing) { stopEditing(); return; }
+      if (arranging) {
+        if (pickedId === app.id) { putDown(); } else { pickUp(app.id); }
+        return;
+      }
       launch(app.id);
     });
     tile.addEventListener("mousedown", function () {
-      if (!editing) { startHold(tile, true); }
+      if (!arranging) { startHold(tile, true); }
     });
     return tile;
   }
 
-  // Ends the Tools row while any apps are hidden, and opens the Hidden apps view.
+  // Ends the Tools row while any apps are hidden, and starts arranging in the Hidden row.
   function makeHiddenTile(count) {
     var button = document.createElement("button");
     button.type = "button";
@@ -179,7 +184,10 @@
     name.textContent = "Hidden apps";
     button.appendChild(picture);
     button.appendChild(name);
-    button.addEventListener("click", function () { showView("hidden"); });
+    button.addEventListener("click", function () {
+      startArranging();
+      setFocus(document.querySelector("#hidden-row .focusable"));
+    });
     return button;
   }
 
@@ -188,47 +196,43 @@
     renderApps(null);
   }
 
-  // Draws both rows in the saved order without the hidden apps.
+  // Draws the rows in the saved order: the apps, Tools, and while arranging the Hidden row (otherwise a
+  // Hidden apps tile ends Tools). The app picked up stays picked up.
   function renderApps(focusId) {
     var apps = document.getElementById("apps");
     var tools = document.getElementById("tools");
+    var hiddenRow = document.getElementById("hidden-row");
     var status = document.getElementById("status");
-    var rows = HomeLogic.arrange(installed, readList(HIDDEN_KEY, DEFAULT_HIDDEN), readList(TOOLS_KEY, DEFAULT_TOOLS), readList(ORDER_KEY, []));
+    var hidden = readList(HIDDEN_KEY, DEFAULT_HIDDEN);
+    var rows = HomeLogic.arrange(installed, hidden, readList(TOOLS_KEY, DEFAULT_TOOLS), readList(ORDER_KEY, []));
 
     apps.textContent = "";
     tools.textContent = "";
+    hiddenRow.textContent = "";
     rows.apps.forEach(function (app) { apps.appendChild(makeHomeTile(app)); });
     rows.tools.forEach(function (app) { tools.appendChild(makeHomeTile(app)); });
-    if (rows.hiddenCount) { tools.appendChild(makeHiddenTile(rows.hiddenCount)); }
-    document.getElementById("tools-section").hidden = !tools.children.length;
+    if (arranging) { HomeLogic.hiddenApps(installed, hidden).forEach(function (app) { hiddenRow.appendChild(makeHomeTile(app)); }); }
+    else if (rows.hiddenCount) { tools.appendChild(makeHiddenTile(rows.hiddenCount)); }
+    document.getElementById("tools-section").hidden = !tools.children.length && !arranging;
+    document.getElementById("hidden-section").hidden = !arranging;
+    document.getElementById("hidden-empty").hidden = !!hiddenRow.children.length;
+    var picked = pickedId && document.querySelector('#home-view [data-app-id="' + pickedId + '"]');
+    if (picked) { picked.classList.add("is-editing"); }
     status.classList.toggle("visible", installed.length === 0);
     status.textContent = installed.length ? "" : "No apps found";
     if (view !== "home") { return; }
-    var focus = focusId && document.querySelector('#home-view [data-app-id="' + focusId + '"]');
+    var focus = (focusId || pickedId) && document.querySelector('#home-view [data-app-id="' + (focusId || pickedId) + '"]');
     setFocus(focus || document.querySelector("#apps .focusable") || document.querySelector("#home-view .focusable"));
   }
 
-  function renderHidden() {
-    var box = document.getElementById("hidden-apps");
-    var apps = HomeLogic.hiddenApps(installed, readList(HIDDEN_KEY, DEFAULT_HIDDEN));
-    box.textContent = "";
-    apps.forEach(function (app) { box.appendChild(makeTile(app, unhide)); });
-    return apps.length;
-  }
-
-  function unhide(app, tile) {
-    var next = tile.nextElementSibling || tile.previousElementSibling;
-    writeList(HIDDEN_KEY, readList(HIDDEN_KEY, DEFAULT_HIDDEN).filter(function (id) { return id !== app.id; }));
-    renderApps(null);
-    if (!renderHidden()) { showView("home"); return; }
-    setFocus(next && document.querySelector('#hidden-apps [data-app-id="' + next.getAttribute("data-app-id") + '"]') ||
-      document.querySelector("#hidden-apps .focusable"));
-  }
-
-  function saveOrder() {
-    writeList(ORDER_KEY, Array.prototype.map.call(document.querySelectorAll("#home-view [data-app-id]"), function (tile) {
-      return tile.getAttribute("data-app-id");
-    }));
+  // The rows as shown, as lists of app ids.
+  function currentLayout() {
+    function ids(rowId) {
+      return Array.prototype.map.call(document.querySelectorAll("#" + rowId + " [data-app-id]"), function (tile) {
+        return tile.getAttribute("data-app-id");
+      });
+    }
+    return { apps: ids("apps"), tools: ids("tools"), hidden: ids("hidden-row") };
   }
 
   function startHold(tile, fromPointer) {
@@ -237,67 +241,86 @@
       holdTimer = null;
       suppressClick = fromPointer;
       awaitingRelease = !fromPointer;
-      startEditing(tile);
+      startArranging();
+      pickUp(tile.getAttribute("data-app-id"));
     }, HOLD_MS);
   }
 
-  function startEditing(tile) {
-    editing = tile;
-    tile.classList.add("is-editing");
-    setFocus(tile);
-    document.getElementById("edit-hint").hidden = false;
+  function showEditHint() {
+    var hint = document.getElementById("edit-hint");
+    hint.hidden = !arranging;
+    hint.textContent = pickedId ? "Arrows move it · Down to Hidden hides it · OK puts it down" :
+      "OK picks an app up · Back finishes";
   }
 
-  function stopEditing() {
-    if (!editing) { return; }
-    editing.classList.remove("is-editing");
-    editing = null;
-    document.getElementById("edit-hint").hidden = true;
+  function startArranging() {
+    if (arranging) { return; }
+    arranging = true;
+    renderApps(selected && selected.getAttribute("data-app-id"));
+    showEditHint();
   }
 
-  function moveEditing(step) {
-    var target = step > 0 ? editing.nextElementSibling : editing.previousElementSibling;
-    if (!target || !target.getAttribute("data-app-id")) { return; }
-    editing.parentNode.insertBefore(editing, step > 0 ? target.nextElementSibling : target);
-    saveOrder();
-    setFocus(editing);
+  function stopArranging() {
+    if (!arranging) { return; }
+    arranging = false;
+    var focusId = pickedId || (selected && selected.getAttribute("data-app-id"));
+    pickedId = null;
+    renderApps(focusId);
+    showEditHint();
   }
 
-  // Moves the picked-up tile between the daily apps and the Tools row.
-  function switchRow() {
-    var tile = editing;
-    var id = tile.getAttribute("data-app-id");
-    var toolIds = readList(TOOLS_KEY, DEFAULT_TOOLS).filter(function (toolId) { return toolId !== id; });
-    var toTools = tile.parentNode.id === "apps";
-    if (toTools) {
-      toolIds.push(id);
-      document.getElementById("tools").insertBefore(tile, document.getElementById("hidden-tile"));
-    } else {
-      document.getElementById("apps").appendChild(tile);
+  function pickUp(id) {
+    pickedId = id;
+    renderApps(id);
+    showEditHint();
+  }
+
+  function putDown() {
+    var id = pickedId;
+    pickedId = null;
+    renderApps(id);
+    showEditHint();
+  }
+
+  // Moves the app picked up one step and saves where every app now is.
+  function movePicked(direction) {
+    var layout = currentLayout();
+    var next = HomeLogic.moveInLayout(layout, pickedId, direction);
+    if (next === layout) { return; }
+    var lists = HomeLogic.savedLists(next, readList(TOOLS_KEY, DEFAULT_TOOLS), readList(HIDDEN_KEY, DEFAULT_HIDDEN),
+      installed.map(function (app) { return app.id; }));
+    writeList(ORDER_KEY, lists.order);
+    writeList(TOOLS_KEY, lists.tools);
+    writeList(HIDDEN_KEY, lists.hidden);
+    renderApps(pickedId);
+  }
+
+  // Keys while arranging. Returns true when the key was used.
+  function arrangeKey(event) {
+    var key = event.keyCode;
+    var directions = {};
+    directions[KEY.LEFT] = "left";
+    directions[KEY.RIGHT] = "right";
+    directions[KEY.UP] = "up";
+    directions[KEY.DOWN] = "down";
+    if (pickedId) {
+      event.preventDefault();
+      if (directions[key]) { movePicked(directions[key]); }
+      else if ((key === KEY.ENTER && !awaitingRelease && !event.repeat) || key === KEY.BACK) { putDown(); }
+      return true;
     }
-    writeList(TOOLS_KEY, toolIds);
-    document.getElementById("tools-section").hidden = !document.getElementById("tools").children.length;
-    saveOrder();
-    setFocus(tile);
-  }
-
-  function hideEditing() {
-    var tile = editing;
-    var next = tile.nextElementSibling && tile.nextElementSibling.getAttribute("data-app-id") ? tile.nextElementSibling : tile.previousElementSibling;
-    stopEditing();
-    writeList(HIDDEN_KEY, readList(HIDDEN_KEY, DEFAULT_HIDDEN).concat([tile.getAttribute("data-app-id")]));
-    tile.parentNode.removeChild(tile);
-    saveOrder();
-    renderApps(next ? next.getAttribute("data-app-id") : null);
-  }
-
-  function editKey(event) {
-    event.preventDefault();
-    if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) { moveEditing(event.keyCode === KEY.RIGHT ? 1 : -1); }
-    else if (event.keyCode === KEY.UP) { hideEditing(); }
-    else if (event.keyCode === KEY.DOWN) { switchRow(); }
-    else if (event.keyCode === KEY.ENTER && !awaitingRelease) { stopEditing(); }
-    else if (event.keyCode === KEY.BACK) { stopEditing(); }
+    if (key === KEY.BACK) {
+      event.preventDefault();
+      stopArranging();
+      return true;
+    }
+    if (key === KEY.ENTER && selected && selected.getAttribute("data-app-id")) {
+      event.preventDefault();
+      if (!event.repeat) { pickUp(selected.getAttribute("data-app-id")); }
+      return true;
+    }
+    if (key === KEY.ENTER) { stopArranging(); }
+    return false;
   }
 
   function setFocus(element) {
@@ -392,10 +415,7 @@
     });
     if (VIEWS[previous].module) { VIEWS[previous].module.close(); }
     if (VIEWS[name].module) { VIEWS[name].module.open(); }
-    else if (name === "hidden") {
-      renderHidden();
-      setFocus(document.querySelector("#hidden-apps .focusable"));
-    } else {
+    else {
       setFocus(document.getElementById(VIEWS[previous].from) || document.querySelector("#apps .focusable"));
     }
   }
@@ -434,7 +454,7 @@
         if (module.handleKey(event) === "leave") { showView(VIEWS[view].back); }
         return;
       }
-      if (editing) { editKey(event); return; }
+      if (arranging && arrangeKey(event)) { return; }
       if (event.keyCode === KEY.ENTER) {
         // On Home a short press opens the tile when OK is released; holding it picks the tile up instead.
         event.preventDefault();
@@ -480,7 +500,7 @@
         VIEWS[view].module.handlePointer(event);
         return;
       }
-      if (editing) { return; }
+      if (pickedId) { return; }
       if (Math.abs(event.clientX - pointerX) + Math.abs(event.clientY - pointerY) > 8) {
         pointerX = event.clientX;
         pointerY = event.clientY;
@@ -509,7 +529,7 @@
     });
     // The Home key activates Home again and leads to the app grid; a remote button bound to a view
     // (Open Sources) relaunches it with that view.
-    document.addEventListener("webOSRelaunch", function (event) { stopEditing(); showView(viewFromParams(event.detail)); });
+    document.addEventListener("webOSRelaunch", function (event) { stopArranging(); showView(viewFromParams(event.detail)); });
     var system = window.webOSSystem || window.PalmSystem;
     showView(viewFromParams(system && system.launchParams));
     tickClock();
