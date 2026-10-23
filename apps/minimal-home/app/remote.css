@@ -155,6 +155,12 @@
   box-shadow: inset 0 0 0 0.24vh var(--accent), 0 2vh 5vh rgba(0, 0, 0, 0.45);
 }
 
+/* Only the highlight shows while the drawing has the focus, also when it is on a kept button. */
+#remote-view #remote-drawing.is-focused .remote-button.is-selected:not(.is-pointed) {
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: none;
+}
+
 #remote-view .remote-button.is-pointed {
   background: rgba(114, 214, 255, 0.28);
   color: var(--text);

@@ -108,6 +108,12 @@ test("arrows move between drawn buttons along rows and columns", () => {
   assert.strictEqual(move("Red", "right"), "Green");
   assert.strictEqual(move("Netflix", "right"), "Prime Video");
   assert.strictEqual(move("Google Assistant", "down"), null, "bottom edge");
+  assert.strictEqual(move("Left", "left"), null, "no jump to a button far below");
+  assert.strictEqual(move("3", "up"), "Power");
+  assert.strictEqual(move("Home", "down"), "Left");
+  assert.strictEqual(move("Down", "down"), "Green", "the colour keys sit straight below");
+  assert.strictEqual(move("Down", "left"), "Back");
+  assert.strictEqual(move("Settings", "down"), "Blue");
 });
 
 test("another remote's button can act as Back, so that remote can leave pages", () => {

@@ -87,7 +87,8 @@ var RemoteLogic = (function () {
   }
 
   // The drawn MR24 button nearest to `from` in a direction ("up", "down", "left" or "right"), or null
-  // at the edge. Distance across the direction counts double, so moves follow rows and columns.
+  // at the edge. Only buttons within a cone in that direction count (at most twice as far across as
+  // along it), and distance across counts double, so moves follow rows and columns.
   function nearestButton(from, direction) {
     var best = null;
     var bestScore = Infinity;
@@ -96,7 +97,7 @@ var RemoteLogic = (function () {
       var dy = button.y - from.y;
       var forward = direction === "right" ? dx : direction === "left" ? -dx : direction === "down" ? dy : -dy;
       var cross = direction === "left" || direction === "right" ? Math.abs(dy) : Math.abs(dx);
-      if (button === from || forward <= 4) { return; }
+      if (button === from || forward <= 4 || cross > forward * 2) { return; }
       var score = forward + cross * 2;
       if (score < bestScore) { bestScore = score; best = button; }
     });

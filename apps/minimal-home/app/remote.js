@@ -318,7 +318,8 @@ var RemoteButtons = (function () {
     return drawn.filter(function (entry) { return entry.button === button; })[0];
   }
 
-  // Moves the drawing's highlight to a drawn button and says what it does.
+  // Moves the drawing's highlight to a drawn button and says what it does. A button with a row becomes
+  // the selected one, so the list follows and Left leads to its row.
   function point(entry) {
     if (pointed) { pointed.element.classList.remove("is-pointed"); }
     pointed = entry;
@@ -326,6 +327,11 @@ var RemoteButtons = (function () {
     entry.element.classList.add("is-pointed");
     var button = entry.button;
     var code = String(button.codes[0]);
+    if (!button.power && !button.keep) {
+      lastCode = code;
+      UI.keepInView(rowFor(code));
+      showSelection();
+    }
     setStatus(button.power ? "Power never reaches the TV's software, so it can't be changed" :
       button.keep ? button.name + " stays as it is so the remote remains usable" :
       button.name + " · " + rowFor(code).querySelector(".value").textContent + " · OK changes it");
