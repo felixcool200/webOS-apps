@@ -325,10 +325,58 @@
     return Array.prototype.slice.call(document.querySelectorAll("#" + view + "-view .focusable"));
   }
 
+  // The tile in a grid row (offsetTop, which ignores the scale on focused tiles) closest to the
+  // selected tile horizontally. Screen centres are used because the rows may be in different grids.
+  function closestInRow(grid, top) {
+    var from = selected.getBoundingClientRect();
+    var centre = from.left + from.width / 2;
+    var closest = null;
+    var closestDistance = Infinity;
+    Array.prototype.forEach.call(grid.querySelectorAll(".focusable"), function (tile) {
+      if (tile.offsetTop !== top) { return; }
+      var rect = tile.getBoundingClientRect();
+      var distance = Math.abs(rect.left + rect.width / 2 - centre);
+      if (distance < closestDistance) { closestDistance = distance; closest = tile; }
+    });
+    return closest;
+  }
+
+  // Left/Right on an app tile move within its row, wrapping from the end of the row to its start and
+  // back. Up/Down move to the closest tile in the next row: in the same group, or else in the nearest
+  // row of the next group (Tools below the apps). Otherwise the nearest element in that direction on
+  // screen is picked, which is how Up from the top row reaches the cog.
   function neighbor(direction) {
     var items = focusables();
     if (!items.length) { return null; }
     if (!selected || items.indexOf(selected) < 0) { return items[0]; }
+
+    var grid = selected.parentNode;
+    if ((direction === KEY.LEFT || direction === KEY.RIGHT) && grid.classList.contains("grid")) {
+      // offsetTop ignores the scale on focused and picked-up tiles.
+      var tiles = Array.prototype.filter.call(grid.querySelectorAll(".focusable"), function (tile) {
+        return tile.offsetTop === selected.offsetTop;
+      });
+      var index = tiles.indexOf(selected) + (direction === KEY.RIGHT ? 1 : -1);
+      return tiles[(index + tiles.length) % tiles.length];
+    }
+    if ((direction === KEY.UP || direction === KEY.DOWN) && grid.classList.contains("grid")) {
+      var below = direction === KEY.DOWN;
+      // The next row in the same group, or else the nearest row of the next group in that direction.
+      var rowTops = Array.prototype.map.call(grid.querySelectorAll(".focusable"), function (tile) { return tile.offsetTop; })
+        .filter(function (top) { return below ? top > selected.offsetTop : top < selected.offsetTop; });
+      var target = rowTops.length ? closestInRow(grid, below ? Math.min.apply(null, rowTops) : Math.max.apply(null, rowTops)) : null;
+      if (!target) {
+        var grids = Array.prototype.filter.call(document.querySelectorAll("#" + view + "-view .grid"), function (other) {
+          return other.querySelector(".focusable");
+        });
+        var next = grids[grids.indexOf(grid) + (below ? 1 : -1)];
+        if (next) {
+          var tops = Array.prototype.map.call(next.querySelectorAll(".focusable"), function (tile) { return tile.offsetTop; });
+          target = closestInRow(next, below ? Math.min.apply(null, tops) : Math.max.apply(null, tops));
+        }
+      }
+      if (target) { return target; }
+    }
 
     var from = selected.getBoundingClientRect();
     var fx = from.left + from.width / 2;
@@ -405,7 +453,8 @@
       }
       if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].indexOf(event.keyCode) !== -1) {
         event.preventDefault();
-        setFocus(neighbor(event.keyCode));
+        var next = neighbor(event.keyCode);
+        if (next) { setFocus(next); }
       }
     });
 
