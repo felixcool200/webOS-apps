@@ -131,7 +131,6 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
   line-height: 1.45;
 }
 
-.focusable:hover,
 .focusable.is-focused {
   outline: none;
   background: rgba(255, 255, 255, 0.19);

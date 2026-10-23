@@ -130,7 +130,6 @@ section { height: calc(100% - 11vh); }
   font-size: 1.55vh;
 }
 
-.focusable:hover,
 .focusable.is-focused {
   outline: none;
   background: var(--surface-focus);
@@ -139,7 +138,6 @@ section { height: calc(100% - 11vh); }
   z-index: 2;
 }
 
-.top-action.focusable:hover,
 .top-action.focusable.is-focused { transform: scale(1.04); }
 
 #status {

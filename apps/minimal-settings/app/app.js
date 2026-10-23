@@ -377,12 +377,14 @@
   }
 
   function initNavigation() {
-    focusables().forEach(function (element) {
-      element.addEventListener("mouseenter", function () {
-        if (editing && editing !== element) { stopEditing(false); }
-        if (selected !== element) { horizontalReturn = null; }
-        setFocus(element);
-      });
+    // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
+    // browser keeps :hover on the last pointed-at row after an arrow press hides the pointer.
+    document.addEventListener("mousemove", function (event) {
+      var element = event.target.closest && event.target.closest(".focusable");
+      if (!element || element === selected) { return; }
+      if (editing && editing !== element) { stopEditing(false); }
+      horizontalReturn = null;
+      setFocus(element);
     });
     document.addEventListener("keydown", function (event) {
       if (event.keyCode === KEY.BACK) {

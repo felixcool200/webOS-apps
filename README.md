@@ -4,8 +4,8 @@ Small, fast applications for a rooted LG webOS TV.
 
 ## Apps
 
-- **Minimal Home 0.1.6** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
-- **Minimal Settings 0.3.3** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
+- **Minimal Home 0.1.7** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
+- **Minimal Settings 0.3.4** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
 - **Departures 0.2.0** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
 
 All apps are plain webOS web applications. Privileged operations use the root execution service supplied by [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
@@ -45,24 +45,24 @@ Upload and install Minimal Settings first:
 
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  'cat > /tmp/org.webosbrew.minimalsettings_0.3.3_all.ipk' \
-  < apps/minimal-settings/dist/org.webosbrew.minimalsettings_0.3.3_all.ipk
+  'cat > /tmp/org.webosbrew.minimalsettings_0.3.4_all.ipk' \
+  < apps/minimal-settings/dist/org.webosbrew.minimalsettings_0.3.4_all.ipk
 
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   "luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
-  '{\"id\":\"org.webosbrew.minimalsettings\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalsettings_0.3.3_all.ipk\",\"subscribe\":true}'"
+  '{\"id\":\"org.webosbrew.minimalsettings\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalsettings_0.3.4_all.ipk\",\"subscribe\":true}'"
 ```
 
 Then upload and install Minimal Home:
 
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
-  'cat > /tmp/org.webosbrew.minimalhome_0.1.6_all.ipk' \
-  < apps/minimal-home/dist/org.webosbrew.minimalhome_0.1.6_all.ipk
+  'cat > /tmp/org.webosbrew.minimalhome_0.1.7_all.ipk' \
+  < apps/minimal-home/dist/org.webosbrew.minimalhome_0.1.7_all.ipk
 
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   "luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
-  '{\"id\":\"org.webosbrew.minimalhome\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalhome_0.1.6_all.ipk\",\"subscribe\":true}'"
+  '{\"id\":\"org.webosbrew.minimalhome\",\"ipkUrl\":\"/tmp/org.webosbrew.minimalhome_0.1.7_all.ipk\",\"subscribe\":true}'"
 ```
 
 Verify both versions before changing the Home app:

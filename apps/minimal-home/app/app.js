@@ -103,7 +103,6 @@
     button.appendChild(picture);
     button.appendChild(name);
     button.addEventListener("click", function () { launch(app.id); });
-    button.addEventListener("mouseenter", function () { setFocus(button); });
     return button;
   }
 
@@ -187,10 +186,14 @@
       }
     });
 
+    // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
+    // browser keeps :hover on the last pointed-at tile after an arrow press hides the pointer.
     document.addEventListener("mousemove", function (event) {
       if (Math.abs(event.clientX - pointerX) + Math.abs(event.clientY - pointerY) > 8) {
         pointerX = event.clientX;
         pointerY = event.clientY;
+        var target = event.target.closest && event.target.closest(".focusable");
+        if (target && target !== selected) { setFocus(target); }
       }
     });
   }
