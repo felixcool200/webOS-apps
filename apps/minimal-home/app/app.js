@@ -63,6 +63,9 @@
   // picked up (its id) moves with the arrows.
   var arranging = false;
   var pickedId = null;
+  // Each app's tile, made once and then moved around, so redrawing the rows never reloads an icon
+  // (it would flash the initials until the image is back).
+  var tiles = {};
   var holdTimer = null;
   var suppressClick = false;
   // Set while the OK press that picked a tile up is still held, so its repeats don't put it down.
@@ -193,7 +196,13 @@
 
   function showApps(apps) {
     installed = HomeLogic.sortInstalled(apps, PREFERRED_APP_ORDER, [APP_ID, "com.webos.app.home"]);
+    tiles = {};
     renderApps(null);
+  }
+
+  function tileFor(app) {
+    if (!tiles[app.id]) { tiles[app.id] = makeHomeTile(app); }
+    return tiles[app.id];
   }
 
   // Draws the rows in the saved order: the apps, Tools, and while arranging the Hidden row (otherwise a
@@ -209,15 +218,14 @@
     apps.textContent = "";
     tools.textContent = "";
     hiddenRow.textContent = "";
-    rows.apps.forEach(function (app) { apps.appendChild(makeHomeTile(app)); });
-    rows.tools.forEach(function (app) { tools.appendChild(makeHomeTile(app)); });
-    if (arranging) { HomeLogic.hiddenApps(installed, hidden).forEach(function (app) { hiddenRow.appendChild(makeHomeTile(app)); }); }
+    rows.apps.forEach(function (app) { apps.appendChild(tileFor(app)); });
+    rows.tools.forEach(function (app) { tools.appendChild(tileFor(app)); });
+    if (arranging) { HomeLogic.hiddenApps(installed, hidden).forEach(function (app) { hiddenRow.appendChild(tileFor(app)); }); }
     else if (rows.hiddenCount) { tools.appendChild(makeHiddenTile(rows.hiddenCount)); }
     document.getElementById("tools-section").hidden = !tools.children.length && !arranging;
     document.getElementById("hidden-section").hidden = !arranging;
     document.getElementById("hidden-empty").hidden = !!hiddenRow.children.length;
-    var picked = pickedId && document.querySelector('#home-view [data-app-id="' + pickedId + '"]');
-    if (picked) { picked.classList.add("is-editing"); }
+    Object.keys(tiles).forEach(function (id) { tiles[id].classList.toggle("is-editing", id === pickedId); });
     status.classList.toggle("visible", installed.length === 0);
     status.textContent = installed.length ? "" : "No apps found";
     if (view !== "home") { return; }
