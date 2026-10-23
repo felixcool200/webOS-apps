@@ -35,7 +35,9 @@ The TV's shell is busybox `sh`: no bashisms such as `PIPESTATUS`, and limited `l
 
 ## Create an app
 
-1. Create `apps/<name>/` with this layout, using `apps/minimal-settings` as the reference:
+First decide whether it should be an app at all. A screen reached from Home, like Settings, belongs inside Minimal Home as a view (see `apps/minimal-home/app/settings.js`): switching views took 0.1–0.25 s on the TV, while launching any separate app takes about 0.9 s. Make a separate app only for something that runs on its own, like Departures.
+
+1. Create `apps/<name>/` with this layout, using `apps/departures` as the reference:
 
    ```text
    apps/<name>/
@@ -45,21 +47,21 @@ The TV's shell is busybox `sh`: no bashisms such as `PIPESTATUS`, and limited `l
      README.md           # what it does, how to build
      app/
        appinfo.json
-       index.html        # must load exactly <link rel="stylesheet" href="style.css"> and <script src="app.js"></script>
-       style.css
+       index.html        # loads style.css and app.js
+         style.css
        app.js
        icon.png          # 80x80
        largeIcon.png     # 130x130
    ```
 
-   `scripts/build-app.js` copies `app/` to `build/`, puts `shared/base.css` in front of `style.css` and `shared/webos.js` in front of `app.js`, and inlines both into `index.html`. The TV then reads one file at startup. `build/` is what gets packaged.
+   `scripts/build-app.js` copies `app/` to `build/`, puts `shared/base.css` in front of `style.css` and `shared/webos.js` in front of `app.js`, and adds `shared/splash.png`. `build/` is what gets packaged. (Inlining everything into `index.html` was tried and made no measurable difference.)
 
-2. `appinfo.json`: copy the one from `minimal-settings` and change `id`, `title` and `version`. The id is `org.webosbrew.<name>` with no dashes. Keep `"requiredPermissions": ["all"]`, the 1920x1080/3840x2160 resolutions, `disableBackHistoryAPI`, `noSplashOnLaunch` and `"vendor": "Local"`. Drop `"visible": false` if the app should appear in the launcher.
+2. `appinfo.json`: copy the one from `departures` and change `id`, `title` and `version`. The id is `org.webosbrew.<name>` with no dashes. Keep `"requiredPermissions": ["all"]`, the 1920x1080/3840x2160 resolutions, `disableBackHistoryAPI`, `"vendor": "Local"`, and `"noSplashOnLaunch": false` with `"splashBackground": "splash.png"`: webOS then shows our background for the last ~0.3 s of the start instead of black. The first ~0.4 s after the previous app disappears stays black whatever we do. `shared/splash.png` is a 192x108 render of `shared/base.css`'s background, which webOS stretches to full screen: a 1920x1080 version appeared about 150 ms later. If the background changes, re-render it (a headless Chrome screenshot of a page with only `base.css`, scaled down). Add `"visible": false` if the app should not appear in the launcher. (Opening apps as transparent overlays, `"defaultWindowType": "overlay"`, also hides the black and was about 0.3 s faster, but did not feel faster and was not adopted.)
 3. Keep `version` identical in `package.json` and `appinfo.json`. The IPK is named `<id>_<version>_all.ipk`.
 4. Follow the existing code style in `app.js`:
    - One IIFE with `"use strict"`, `var`, plain functions, started on `DOMContentLoaded`.
-   - `var KEY = WebOS.KEY;` and one `keydown` handler that calls `preventDefault()`. Back calls `WebOS.backToHome()`, which brings Minimal Home to the front. Don't use `webOSSystem.close()`: webOS then shows its last-input screen first, and Back took about 1.7 s to reach Home instead of 0.65 s. Don't use `platformBack()` either: it shows a "Do you want to exit the app?" prompt.
-   - Every interactive element has the `focusable` class and is highlighted only through the app's `.is-focused` class, never `:hover`: the browser keeps `:hover` on the last pointed-at element after an arrow press hides the Magic Remote pointer. Pointer movement (`mousemove`) moves the same focus, as in Home and Settings. The app must be fully usable with arrows, OK and Back.
+   - `var KEY = WebOS.KEY;` and one `keydown` handler that calls `preventDefault()`. Back in a separate app calls `WebOS.backToHome()`, which brings Minimal Home to the front. Don't use `webOSSystem.close()`: webOS then shows its last-input screen first, and Back took about 1.7 s to reach Home instead of 0.65 s. Don't use `platformBack()` either: it shows a "Do you want to exit the app?" prompt.
+   - Every interactive element has the `focusable` class and is highlighted only through the app's `.is-focused` class, never `:hover`: the browser keeps `:hover` on the last pointed-at element after an arrow press hides the Magic Remote pointer. Pointer movement (`mousemove`) moves the same focus, as in Home. The app must be fully usable with arrows, OK and Back.
    - For Luna and root calls use `WebOS.lunaCall`, `WebOS.rootExec` and `WebOS.rootLuna` from `shared/webos.js`. Use `rootLuna` for anything that needs root (launching apps, settings writes); it rejects when the call answers `returnValue: false`. Root calls can fail while webOS is busy (for example right after Home reloads), so retry important ones before showing an error, as Home does with its app list.
    - Listen for `webOSRelaunch` to refresh state when the app is reopened.
    - Fullscreen layout sized for 1920x1080. `shared/base.css` provides the page reset, background, font and the shared colours (`--accent`, `--bg`, `--text`, `--muted`, `--error`, `--ok`); the app's `style.css` adds only its own tokens and layout.
@@ -93,7 +95,7 @@ There is no automated test suite. Check each change on the TV:
 
    `*-capture.png` is gitignored. If the capture call fails on this firmware, ask the user to check the screen instead.
 4. **Logs:** `tv 'grep <app-id> /var/log/messages | tail -n 50'` shows launch and visibility events only. JavaScript errors and `console` output are not logged, so have the app show failures in its own status line and check them in a screenshot.
-5. **Startup time:** close the app, launch it, and compare the `NL_APP_LAUNCH_BEGIN` and first `NL_VSC` `"visible":true` timestamps for its id in `/var/log/messages`. Measure several cold starts before and after a change meant to speed things up. A cold start took 0.8–1.1 s in October 2026, almost all of it webOS starting the page.
+5. **Startup time:** close the app, launch it, and compare the `NL_APP_LAUNCH_BEGIN` and first `NL_VSC` `"visible":true` timestamps for its id in `/var/log/messages`. Measure several cold starts before and after a change meant to speed things up. In October 2026 an empty test page needed about 690 ms to become visible: roughly 150 ms for webOS to start the page and 400 ms more before its first script ran. Our apps became visible at 850–880 ms, so about 80% of the black screen at launch is webOS. For a finer breakdown, temporarily report `performance.timing` and the paint entries from the page (for example appended to a file under `/tmp` via `WebOS.rootExec`), compare with an empty test app, and remove the instrumentation afterwards.
 6. **Remote navigation:** `tv 'luna-send -n 1 luna://com.webos.service.networkinput/sendSpecialKey "{\"key\":\"BACK\"}"'` presses a key (also `HOME`), which is enough for timing tests. Arrow navigation and pointer behaviour still need the physical remote. Ask the user to check specific keys (for example "press Down twice, then OK; the Wi-Fi row should enter edit mode") rather than a vague "try it".
 
 Layout-only checks can also run locally: `npm run build` in the app directory, then `python3 -m http.server -d apps/<name>/build 8000` in a 1920x1080 browser window. `app/` on its own lacks the shared code. Luna calls fail there because `PalmServiceBridge` only exists on the TV. Stop the server when you are done.

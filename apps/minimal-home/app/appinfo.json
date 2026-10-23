@@ -1,6 +1,6 @@
 {
   "id": "org.webosbrew.minimalhome",
-  "version": "0.1.11",
+  "version": "0.2.2",
   "vendor": "Local",
   "type": "web",
   "main": "index.html",
@@ -12,7 +12,8 @@
   "resolution": ["1920x1080", "3840x2160"],
   "supportTouchMode": "full",
   "disableBackHistoryAPI": true,
-  "noSplashOnLaunch": true,
+  "noSplashOnLaunch": false,
+  "splashBackground": "splash.png",
   "spinnerOnLaunch": false,
   "transparent": false
 }

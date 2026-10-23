@@ -27,6 +27,10 @@
   // webOS reloads Home twice in quick succession when it comes into view, and the app list call
   // sometimes gets no answer then. Retry after these delays before showing an error.
   var APP_LIST_RETRY_MS = [500, 1000, 2000];
+  // Settings values are read this long after Home is on screen, so they are ready when the Settings
+  // view opens without competing with the app list.
+  var SETTINGS_PRELOAD_DELAY_MS = 1000;
+  var view = "home";
   var selected = null;
   var pointerX = 0;
   var pointerY = 0;
@@ -117,7 +121,7 @@
   }
 
   function focusables() {
-    return Array.prototype.slice.call(document.querySelectorAll(".focusable"));
+    return Array.prototype.slice.call(document.querySelectorAll("#home-view .focusable"));
   }
 
   function neighbor(direction) {
@@ -145,8 +149,38 @@
     return best;
   }
 
+  // Home and Settings are two views of this page, so opening Settings needs no app launch.
+  function showView(name) {
+    if (name === view) { return; }
+    view = name;
+    document.getElementById("home-view").hidden = name !== "home";
+    document.getElementById("settings-view").hidden = name !== "settings";
+    if (name === "settings") { MinimalSettings.open(); }
+    else {
+      MinimalSettings.close();
+      setFocus(document.getElementById("settings"));
+    }
+  }
+
+  function preloadSettings() {
+    if (!document.hidden) {
+      window.setTimeout(MinimalSettings.preload, SETTINGS_PRELOAD_DELAY_MS);
+      return;
+    }
+    // webOS reloads Home in the background; read the settings only once Home is actually shown.
+    document.addEventListener("visibilitychange", function onVisible() {
+      if (document.hidden) { return; }
+      document.removeEventListener("visibilitychange", onVisible);
+      window.setTimeout(MinimalSettings.preload, SETTINGS_PRELOAD_DELAY_MS);
+    });
+  }
+
   function initNavigation() {
     document.addEventListener("keydown", function (event) {
+      if (view === "settings") {
+        if (MinimalSettings.handleKey(event) === "leave") { showView("home"); }
+        return;
+      }
       if (event.keyCode === KEY.ENTER) {
         event.preventDefault();
         if (selected) { selected.click(); }
@@ -166,6 +200,10 @@
     // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
     // browser keeps :hover on the last pointed-at tile after an arrow press hides the pointer.
     document.addEventListener("mousemove", function (event) {
+      if (view === "settings") {
+        MinimalSettings.handlePointer(event);
+        return;
+      }
       if (Math.abs(event.clientX - pointerX) + Math.abs(event.clientY - pointerY) > 8) {
         pointerX = event.clientX;
         pointerY = event.clientY;
@@ -189,11 +227,14 @@
   function init() {
     initNavigation();
     document.getElementById("profile").addEventListener("click", function () { launch("com.webos.app.overlaymembership"); });
-    document.getElementById("settings").addEventListener("click", function () { launch("org.webosbrew.minimalsettings"); });
+    document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
+    // The Home key activates Home again; it should always lead to the app grid.
+    document.addEventListener("webOSRelaunch", function () { showView("home"); });
 
     rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
       .catch(function () {})
       .then(function () { return loadApps(0); })
+      .then(preloadSettings)
       .catch(function () {
         var status = document.getElementById("status");
         status.textContent = "Could not load installed apps";

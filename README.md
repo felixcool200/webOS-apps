@@ -4,8 +4,7 @@ Small, fast applications for a rooted LG webOS TV.
 
 ## Apps
 
-- **Minimal Home** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
-- **Minimal Settings** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
+- **Minimal Home** — a fullscreen launcher with a curated app grid, a built-in Settings view for frequently used picture, sound, network, and system settings, Profile, remote navigation, and a reversible stock-Home redirect.
 - **Departures** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
 
 All apps are plain webOS web applications. Privileged operations use the root execution service supplied by [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
@@ -17,9 +16,8 @@ Each app's version is in its `app/appinfo.json` and `package.json`.
 ```text
 apps/departures/
 apps/minimal-home/
-apps/minimal-settings/
 shared/                 palette, page reset and Luna helpers used by every app
-scripts/build-app.js    merges shared/ into an app and inlines it into one index.html
+scripts/build-app.js    merges shared/ into each app's style.css and app.js
 scripts/deploy.sh       package, install and launch an app on the TV
 ```
 
@@ -31,7 +29,7 @@ npm install
 npm run package
 ```
 
-Packaging first builds the app into its `build/` directory: `shared/base.css` and `shared/webos.js` are merged with the app's own `style.css` and `app.js`, and both are inlined into `index.html`, so the TV reads one file at startup. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
+Packaging first builds the app into its `build/` directory, where `shared/base.css` and `shared/webos.js` are put in front of the app's own `style.css` and `app.js`. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
 
 Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest. Do not publish a Departures IPK built with a Trafiklab key; see its README.
 
@@ -44,10 +42,9 @@ TV_HOST=TV_ADDRESS
 TV_SSH_KEY=tv_key
 ```
 
-Install Minimal Settings before Minimal Home, because Home's Settings button opens it:
+Then install the apps:
 
 ```sh
-scripts/deploy.sh apps/minimal-settings
 scripts/deploy.sh apps/minimal-home
 scripts/deploy.sh apps/departures
 ```
@@ -60,11 +57,11 @@ Without the script, upload and install one app at a time. `<version>` is the ver
 
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS 'cat > /tmp/app.ipk' \
-  < apps/minimal-settings/dist/org.webosbrew.minimalsettings_<version>_all.ipk
+  < apps/departures/dist/org.webosbrew.departures_<version>_all.ipk
 
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   "exec </dev/null; luna-send -n 1 -f 'luna://com.webos.appInstallService/dev/install' \
-  '{\"id\":\"org.webosbrew.minimalsettings\",\"ipkUrl\":\"/tmp/app.ipk\",\"subscribe\":true}'"
+  '{\"id\":\"org.webosbrew.departures\",\"ipkUrl\":\"/tmp/app.ipk\",\"subscribe\":true}'"
 ```
 
 Check the installed version, then remove the uploaded file:
@@ -72,7 +69,7 @@ Check the installed version, then remove the uploaded file:
 ```sh
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   "exec </dev/null; luna-send -n 1 -f 'luna://com.webos.service.applicationmanager/getAppInfo' \
-  '{\"id\":\"org.webosbrew.minimalsettings\"}' | grep version; rm -f /tmp/app.ipk"
+  '{\"id\":\"org.webosbrew.departures\"}' | grep version; rm -f /tmp/app.ipk"
 ```
 
 `exec </dev/null` matters when these commands run from a script: without it `luna-send` can exit with no output before the TV replies.

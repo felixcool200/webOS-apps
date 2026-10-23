@@ -1,0 +1,125 @@
+/* The Settings view. Every rule is scoped to #settings-view so it cannot affect the Home view. */
+#settings-view {
+  --surface: rgba(255, 255, 255, 0.085);
+  --surface-2: rgba(255, 255, 255, 0.135);
+  width: 100%;
+  height: 100%;
+  padding: 4vh 4vw 3vh;
+}
+
+#settings-view header {
+  height: 12vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+#settings-view h1, #settings-view h2, #settings-view p { margin: 0; }
+#settings-view h1 { font-size: 4.1vh; font-weight: 600; letter-spacing: -0.03em; }
+#settings-view header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.6vh; }
+#settings-view h2 { margin: 0 0 1.6vh; color: var(--muted); font-size: 2vh; font-weight: 600; }
+
+#settings-view .columns {
+  height: 72vh;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 2.2vw;
+}
+
+#settings-view .panel {
+  overflow: hidden;
+  border-radius: 1.5vh;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+#settings-view .setting {
+  position: relative;
+  width: 100%;
+  min-height: 9.2vh;
+  padding: 1.35vh 1.4vw;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8vw, 13vw) 5.5vw;
+  align-items: center;
+  gap: 1vw;
+  text-align: left;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+#settings-view .setting:last-child { border-bottom: 0; }
+#settings-view .panel > .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
+#settings-view .panel > .setting:last-child { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+#settings-view .setting .copy { min-width: 0; display: flex; flex-direction: column; gap: 0.45vh; }
+#settings-view .setting strong, #settings-view .info-card strong { font-size: 1.75vh; font-weight: 600; }
+#settings-view .setting small { overflow: hidden; color: var(--muted); font-size: 1.3vh; text-overflow: ellipsis; white-space: nowrap; }
+#settings-view .setting .value { grid-column: 3; color: var(--text); text-align: right; font-size: 1.55vh; white-space: nowrap; }
+#settings-view .setting.choice-setting .value { grid-column: 2 / 4; }
+#settings-view .setting.is-editing .value {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 0.7vh rgba(114, 214, 255, 0.85);
+}
+
+#settings-view .setting.is-editing .value.can-decrease::before { content: "‹  "; }
+#settings-view .setting.is-editing .value.can-increase::after { content: "  ›"; }
+#settings-view .status-setting { cursor: default; }
+#settings-view .section-gap { margin-top: 2.2vh; }
+#settings-view .range {
+  position: relative;
+  height: 0.6vh;
+  overflow: hidden;
+  border-radius: 1vh;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+#settings-view .range i {
+  display: block;
+  width: var(--fill, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+#settings-view .action {
+  min-height: 5.2vh;
+  padding: 0 1.3vw;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 1.55vh;
+}
+
+#settings-view .info-card {
+  margin-top: 1.5vh;
+  padding: 1.6vh 1.5vw;
+  border-radius: 1.5vh;
+  background: var(--surface);
+}
+
+#settings-view .info-card p {
+  margin: 0.6vh 0 1.2vh;
+  color: var(--muted);
+  font-size: 1.4vh;
+  line-height: 1.45;
+}
+
+#settings-view .focusable.is-focused {
+  outline: none;
+  background: rgba(255, 255, 255, 0.19);
+  box-shadow: inset 0 0 0 0.24vh var(--accent), 0 1vh 2.5vh rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}
+
+#settings-view .focusable.is-busy { opacity: 0.65; }
+#settings-view footer {
+  height: 9vh;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.3vw;
+  color: var(--muted);
+  font-size: 1.25vh;
+}
+
+#settings-view footer b { color: var(--text); font-weight: 600; }
+#settings-status { margin-left: auto; }
+#settings-status.error { color: var(--error); }
+#settings-status.ok { color: var(--ok); }

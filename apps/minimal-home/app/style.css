@@ -4,31 +4,29 @@
   --surface-focus: rgba(255, 255, 255, 0.20);
 }
 
-main {
+button { border: 0; color: inherit; font: inherit; cursor: pointer; }
+
+/* Home and Settings are two views of this page; only one is shown at a time. */
+[hidden] { display: none !important; }
+
+#home-view {
   width: 100%;
   height: 100%;
   padding: 4.2vh var(--page-x) 5vh;
 }
 
-header {
+#home-view header {
   height: 11vh;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
 }
 
-h1, h2 { margin: 0; font-weight: 600; }
-h1 { font-size: 4.2vh; letter-spacing: -0.03em; }
-h2 { margin-bottom: 2.2vh; color: var(--muted); font-size: 2.15vh; }
+#home-view h1, #home-view h2 { margin: 0; font-weight: 600; }
+#home-view h1 { font-size: 4.2vh; letter-spacing: -0.03em; }
+#home-view h2 { margin-bottom: 2.2vh; color: var(--muted); font-size: 2.15vh; }
 
-nav { display: flex; gap: 0.8vw; }
-
-button {
-  border: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
+#home-view nav { display: flex; gap: 0.8vw; }
 
 .top-action {
   min-width: 8.5vw;
@@ -49,7 +47,7 @@ button {
   fill: currentColor;
 }
 
-section { height: calc(100% - 11vh); }
+#home-view section { height: calc(100% - 11vh); }
 
 #apps {
   max-height: calc(100% - 5vh);
@@ -107,7 +105,7 @@ section { height: calc(100% - 11vh); }
   font-size: 1.55vh;
 }
 
-.focusable.is-focused {
+#home-view .focusable.is-focused {
   outline: none;
   background: var(--surface-focus);
   box-shadow: 0 0 0 0.26vh var(--accent), 0 1.2vh 3vh rgba(0, 0, 0, 0.32);
@@ -115,7 +113,7 @@ section { height: calc(100% - 11vh); }
   z-index: 2;
 }
 
-.top-action.focusable.is-focused { transform: scale(1.04); }
+#home-view .top-action.focusable.is-focused { transform: scale(1.04); }
 
 #status {
   display: none;

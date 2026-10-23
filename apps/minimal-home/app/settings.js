@@ -1,4 +1,6 @@
-(function () {
+// The Settings view inside Minimal Home. Home shows #settings-view and routes keys and pointer
+// movement here while it is open; this module never listens on the document itself.
+var MinimalSettings = (function () {
   "use strict";
 
   var KEY = WebOS.KEY;
@@ -8,6 +10,8 @@
   var horizontalReturn = null;
   var state = {};
   var busy = false;
+  var ready = false;
+  var loaded = false;
 
   var SPECS = {
     pictureMode: { category: "picture", kind: "choice", labels: {
@@ -37,7 +41,7 @@
   };
 
   function setStatus(message, type) {
-    var box = document.getElementById("status");
+    var box = document.getElementById("settings-status");
     box.textContent = message;
     box.className = type || "";
   }
@@ -130,7 +134,7 @@
   }
 
   function load() {
-    setStatus("Reading current settings…");
+    if (!loaded) { setStatus("Reading current settings…"); }
     return Promise.all([
       readCurrent("picture", ["pictureMode", "backlight", "brightness", "contrast", "colorTemperature", "energySaving"]),
       readCurrent("sound", ["soundMode"]),
@@ -152,6 +156,7 @@
       state.energySaving.values = allowedValues("energySaving", results[4], state.energySaving.value);
       state.soundMode.values = allowedValues("soundMode", results[5], state.soundMode.value);
       state.quickStartMode.values = allowedValues("quickStartMode", results[6], state.quickStartMode.value);
+      loaded = true;
       renderNetwork(results[7], results[8]);
       Object.keys(SPECS).forEach(renderSetting);
       if (editing) { editingStatus(); }
@@ -231,7 +236,7 @@
   }
 
   function focusables() {
-    return Array.prototype.slice.call(document.querySelectorAll(".focusable"));
+    return Array.prototype.slice.call(document.querySelectorAll("#settings-view .focusable"));
   }
 
   function setFocus(element) {
@@ -350,46 +355,49 @@
       .catch(function (error) { setStatus("Could not open LG Settings: " + error.message, "error"); });
   }
 
-  function initNavigation() {
-    // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
-    // browser keeps :hover on the last pointed-at row after an arrow press hides the pointer.
-    document.addEventListener("mousemove", function (event) {
-      var element = event.target.closest && event.target.closest(".focusable");
-      if (!element || element === selected) { return; }
-      if (editing && editing !== element) { stopEditing(false); }
-      horizontalReturn = null;
-      setFocus(element);
-    });
-    document.addEventListener("keydown", function (event) {
-      if (event.keyCode === KEY.BACK) {
-        event.preventDefault();
-        if (editing) { stopEditing(); }
-        else { WebOS.backToHome(); }
-      } else if (editing && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) {
-        event.preventDefault();
-        adjustSelected(event.keyCode === KEY.RIGHT ? 1 : -1);
-      } else if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN ||
-                 event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
-        event.preventDefault();
-        if (editing) { stopEditing(false); }
-        if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
-          horizontalReturn = null;
-          setFocus(verticalNeighbor(event.keyCode));
-        } else {
-          setFocus(horizontalNeighbor(event.keyCode));
-        }
-        setStatus("Ready", "ok");
-      } else if (event.keyCode === KEY.ENTER) {
-        event.preventDefault();
-        if (editing) { stopEditing(); }
-        else if (selected && selected.getAttribute("data-setting")) { startEditing(selected); }
-        else if (selected) { selected.click(); }
-      }
-    });
+  // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
+  // browser keeps :hover on the last pointed-at row after an arrow press hides the pointer.
+  function handlePointer(event) {
+    var element = event.target.closest && event.target.closest("#settings-view .focusable");
+    if (!element || element === selected) { return; }
+    if (editing && editing !== element) { stopEditing(false); }
+    horizontalReturn = null;
+    setFocus(element);
   }
 
-  function init() {
-    initNavigation();
+  // Returns "leave" when Back should take the user back to the Home view.
+  function handleKey(event) {
+    if (event.keyCode === KEY.BACK) {
+      event.preventDefault();
+      if (editing) { stopEditing(); return null; }
+      return "leave";
+    }
+    if (editing && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) {
+      event.preventDefault();
+      adjustSelected(event.keyCode === KEY.RIGHT ? 1 : -1);
+    } else if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN ||
+               event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
+      event.preventDefault();
+      if (editing) { stopEditing(false); }
+      if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
+        horizontalReturn = null;
+        setFocus(verticalNeighbor(event.keyCode));
+      } else {
+        setFocus(horizontalNeighbor(event.keyCode));
+      }
+      setStatus("Ready", "ok");
+    } else if (event.keyCode === KEY.ENTER) {
+      event.preventDefault();
+      if (editing) { stopEditing(); }
+      else if (selected && selected.getAttribute("data-setting")) { startEditing(selected); }
+      else if (selected) { selected.click(); }
+    }
+    return null;
+  }
+
+  function setup() {
+    if (ready) { return; }
+    ready = true;
     document.querySelectorAll("[data-setting]").forEach(function (element) {
       element.addEventListener("click", function () {
         if (editing === element) { stopEditing(); }
@@ -397,10 +405,25 @@
       });
     });
     document.getElementById("advanced").addEventListener("click", openAdvanced);
-    document.addEventListener("webOSRelaunch", load);
     setFocus(document.querySelector("[data-setting]"));
+  }
+
+  // Reads the values in the background so they are already shown when the view opens.
+  function preload() {
+    setup();
+    if (!loaded) { load(); }
+  }
+
+  // Called when the view is shown. Values from preload stay visible while fresh ones are read.
+  function open() {
+    setup();
+    updateHints(false);
     load();
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  function close() {
+    stopEditing(false);
+  }
+
+  return { preload: preload, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
 }());
