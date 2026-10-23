@@ -32,6 +32,10 @@ The bindings are stored in `/home/root/.config/lginputhook/keybinds.json` and ap
 
 The page's rules (which buttons are listed, what they can do, reading presses from the hook's log) are in `app/remote-logic.js`, tested by `test/remote-logic.test.js`.
 
+## Grid
+
+Home's apps, Tools and (while arranging) Hidden are one grid: Up/Down move a line at a time and between the sections at the same place across the screen, Left/Right move along a line and wrap at its ends, and Up from the top line reaches the Sources and Settings buttons. The same grid model (`gridNeighbor` and `moveInLayout` in `app/home-logic.js`) moves the focus and, while arranging, a picked-up app.
+
 ## Arranging apps
 
 Hold OK (or the pointer button) on an app for about half a second to start arranging, like LG's own launcher: the app is picked up, and a Hidden box opens below the Tools row with the hidden apps. The arrows move the picked-up app around the grid: Left/Right along its line, Up/Down a line at a time, and down from the last line of the apps into Tools and then into Hidden (and back up), keeping its column where it can. Moving it into Hidden hides it, and moving it back up shows it again, so a mistake is one press to undo. OK puts it down and arranging goes on: move to another app, including one in the Hidden box, and press OK to pick it up. Back finishes, and the Hidden box closes. A short press of OK outside arranging still opens the app.

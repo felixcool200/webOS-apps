@@ -306,9 +306,9 @@
     showEditHint();
   }
 
-  // How many apps a row shows per line, from its grid's columns.
-  function columnsOf(rowId) {
-    var tracks = window.getComputedStyle(document.getElementById(rowId)).gridTemplateColumns;
+  // How many tiles a grid shows per line, from its columns.
+  function columnsOf(grid) {
+    var tracks = window.getComputedStyle(grid).gridTemplateColumns;
     return tracks && tracks !== "none" ? tracks.split(" ").length : Infinity;
   }
 
@@ -316,7 +316,8 @@
   function movePicked(direction) {
     var layout = currentLayout();
     var next = HomeLogic.moveInLayout(layout, pickedId, direction,
-      { apps: columnsOf("apps"), tools: columnsOf("tools"), hidden: columnsOf("hidden-row") });
+      { apps: columnsOf(document.getElementById("apps")), tools: columnsOf(document.getElementById("tools")),
+        hidden: columnsOf(document.getElementById("hidden-row")) });
     if (next === layout) { return; }
     var lists = HomeLogic.savedLists(next, readList(TOOLS_KEY, DEFAULT_TOOLS), readList(HIDDEN_KEY, DEFAULT_HIDDEN),
       installed.map(function (app) { return app.id; }));
@@ -363,57 +364,33 @@
     return Array.prototype.slice.call(document.querySelectorAll("#" + view + "-view .focusable"));
   }
 
-  // The tile in a grid row (offsetTop, which ignores the scale on focused tiles) closest to the
-  // selected tile horizontally. Screen centres are used because the rows may be in different grids.
-  function closestInRow(grid, top) {
-    var from = selected.getBoundingClientRect();
-    var centre = from.left + from.width / 2;
-    var closest = null;
-    var closestDistance = Infinity;
-    Array.prototype.forEach.call(grid.querySelectorAll(".focusable"), function (tile) {
-      if (tile.offsetTop !== top) { return; }
-      var rect = tile.getBoundingClientRect();
-      var distance = Math.abs(rect.left + rect.width / 2 - centre);
-      if (distance < closestDistance) { closestDistance = distance; closest = tile; }
-    });
-    return closest;
+  function tilesOf(grid) {
+    return Array.prototype.slice.call(grid.querySelectorAll(".focusable"));
   }
 
-  // Left/Right on an app tile move within its row, wrapping from the end of the row to its start and
-  // back. Up/Down move to the closest tile in the next row: in the same group, or else in the nearest
-  // row of the next group (Tools below the apps). Otherwise the nearest element in that direction on
-  // screen is picked, which is how Up from the top row reaches the cog.
+  // The arrows move through the view's grids as HomeLogic.gridNeighbor describes: line by line, and
+  // between sections at the same place across the screen. Past the grid's edge (Up from the top line
+  // to the Sources and Settings buttons) and outside it, the nearest element in that direction on
+  // screen is picked.
   function neighbor(direction) {
     var items = focusables();
     if (!items.length) { return null; }
     if (!selected || items.indexOf(selected) < 0) { return items[0]; }
 
-    var grid = selected.parentNode;
-    if ((direction === KEY.LEFT || direction === KEY.RIGHT) && grid.classList.contains("grid")) {
-      // offsetTop ignores the scale on focused and picked-up tiles.
-      var tiles = Array.prototype.filter.call(grid.querySelectorAll(".focusable"), function (tile) {
-        return tile.offsetTop === selected.offsetTop;
-      });
-      var index = tiles.indexOf(selected) + (direction === KEY.RIGHT ? 1 : -1);
-      return tiles[(index + tiles.length) % tiles.length];
-    }
-    if ((direction === KEY.UP || direction === KEY.DOWN) && grid.classList.contains("grid")) {
-      var below = direction === KEY.DOWN;
-      // The next row in the same group, or else the nearest row of the next group in that direction.
-      var rowTops = Array.prototype.map.call(grid.querySelectorAll(".focusable"), function (tile) { return tile.offsetTop; })
-        .filter(function (top) { return below ? top > selected.offsetTop : top < selected.offsetTop; });
-      var target = rowTops.length ? closestInRow(grid, below ? Math.min.apply(null, rowTops) : Math.max.apply(null, rowTops)) : null;
-      if (!target) {
-        var grids = Array.prototype.filter.call(document.querySelectorAll("#" + view + "-view .grid"), function (other) {
-          return other.querySelector(".focusable");
-        });
-        var next = grids[grids.indexOf(grid) + (below ? 1 : -1)];
-        if (next) {
-          var tops = Array.prototype.map.call(next.querySelectorAll(".focusable"), function (tile) { return tile.offsetTop; });
-          target = closestInRow(next, below ? Math.min.apply(null, tops) : Math.max.apply(null, tops));
-        }
-      }
-      if (target) { return target; }
+    var grids = Array.prototype.filter.call(document.querySelectorAll("#" + view + "-view .grid"), function (grid) {
+      return !grid.closest("[hidden]");
+    });
+    var section = grids.indexOf(selected.parentNode);
+    if (section >= 0) {
+      var names = {};
+      names[KEY.LEFT] = "left";
+      names[KEY.RIGHT] = "right";
+      names[KEY.UP] = "up";
+      names[KEY.DOWN] = "down";
+      var target = HomeLogic.gridNeighbor(grids.map(function (grid) {
+        return { count: tilesOf(grid).length, columns: columnsOf(grid) };
+      }), { section: section, index: tilesOf(selected.parentNode).indexOf(selected) }, names[direction]);
+      if (target) { return tilesOf(grids[target.section])[target.index]; }
     }
 
     var from = selected.getBoundingClientRect();

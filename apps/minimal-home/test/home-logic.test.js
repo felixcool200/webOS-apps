@@ -95,8 +95,27 @@ test("arranging moves an app a line at a time within a section before leaving it
   const columns = { apps: 3, tools: 4, hidden: 4 };
   const grid = () => ({ apps: ["a", "b", "c", "d", "e"], tools: ["t1", "t2"], hidden: ["h1"] });
   assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "b", "down", columns).apps, ["a", "c", "d", "e", "b"], "b goes to the second line");
-  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "e", "down", columns).tools, ["t1", "e", "t2"], "from the last line into Tools, same column");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "e", "down", columns).tools, ["t1", "t2", "e"], "from the last line into Tools, at the same place across the screen");
   assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "e", "up", columns).apps, ["a", "e", "b", "c", "d"], "up a line");
   assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "t2", "up", columns).apps, ["a", "b", "c", "d", "t2", "e"], "into the apps' last line");
   assert.deepStrictEqual(HomeLogic.moveInLayout(grid(), "a", "up", columns), grid(), "nothing above the first line");
+});
+
+test("the arrows move through Home's grid line by line, and between sections at the same place", () => {
+  // Apps: 8 to a line, 11 apps (8 + 3); Tools: 10 to a line, 3 tools.
+  const sections = [{ count: 11, columns: 8 }, { count: 3, columns: 10 }];
+  const go = (section, index, direction) => HomeLogic.gridNeighbor(sections, { section: section, index: index }, direction);
+  assert.deepStrictEqual(go(0, 2, "down"), { section: 0, index: 10 }, "second line, same column");
+  assert.deepStrictEqual(go(0, 5, "down"), { section: 0, index: 10 }, "the second line is shorter");
+  assert.deepStrictEqual(go(0, 10, "down"), { section: 1, index: 2 }, "into Tools");
+  assert.deepStrictEqual(go(1, 1, "up"), { section: 0, index: 9 }, "into the apps' last line");
+  assert.deepStrictEqual(go(0, 7, "right"), { section: 0, index: 0 }, "wraps within the line");
+  assert.deepStrictEqual(go(0, 8, "left"), { section: 0, index: 10 }, "wraps within the short line");
+  assert.strictEqual(go(0, 3, "up"), null, "past the top");
+  assert.strictEqual(go(1, 0, "down"), null, "past the bottom");
+});
+
+test("the arrows skip an empty section", () => {
+  const sections = [{ count: 3, columns: 8 }, { count: 0, columns: 10 }, { count: 2, columns: 10 }];
+  assert.deepStrictEqual(HomeLogic.gridNeighbor(sections, { section: 0, index: 1 }, "down"), { section: 2, index: 1 });
 });

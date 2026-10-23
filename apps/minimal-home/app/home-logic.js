@@ -46,6 +46,43 @@ var HomeLogic = (function () {
     return length && isFinite(width) ? Math.floor((length - 1) / width) * width : 0;
   }
 
+  // The column in a section `to` apps wide below or above a column in one `from` apps wide. Every
+  // section spans the screen, so the column keeps its place across it.
+  function mapColumn(column, from, to) {
+    if (!isFinite(from) || !isFinite(to)) { return column; }
+    return Math.min(to - 1, Math.floor((column + 0.5) * to / from));
+  }
+
+  // The tile an arrow leads to in Home's grid: `sections` are the sections shown, top to bottom, as
+  // { count, columns } (columns: tiles per line on screen), and `from` is { section, index }. Left and
+  // right wrap within the line. Up and down go a line at a time, and from a section's first or last
+  // line into the nearest non-empty section above or below, at the same place across the screen.
+  // Returns { section, index }, or null past the top or bottom.
+  function gridNeighbor(sections, from, direction) {
+    var section = sections[from.section];
+    var width = section.columns;
+    var column = from.index % width;
+    var lineStart = from.index - column;
+    if (direction === "left" || direction === "right") {
+      var lineLength = Math.min(width, section.count - lineStart);
+      return { section: from.section, index: lineStart + (column + (direction === "right" ? 1 : -1) + lineLength) % lineLength };
+    }
+    if (direction === "down" && lineStart + width < section.count) {
+      return { section: from.section, index: Math.min(from.index + width, section.count - 1) };
+    }
+    if (direction === "up" && lineStart > 0) {
+      return { section: from.section, index: from.index - width };
+    }
+    var step = direction === "down" ? 1 : -1;
+    for (var next = from.section + step; next >= 0 && next < sections.length; next += step) {
+      if (!sections[next].count) { continue; }
+      var into = sections[next];
+      var start = direction === "down" ? 0 : lastLineStart(into.count, into.columns);
+      return { section: next, index: Math.min(start + mapColumn(column, width, into.columns), into.count - 1) };
+    }
+    return null;
+  }
+
   // Moves app `id` one step in a layout ({ apps, tools, hidden }: the ids as shown). `columns` gives
   // each section's apps per line on screen (one line if left out). Left and right swap it with its
   // neighbour. Up and down move it a line within its section, and from the section's first or last
@@ -84,7 +121,7 @@ var HomeLogic = (function () {
     var name = ROWS[rowIndex];
     var into = next[name];
     var start = direction === "down" ? 0 : lastLineStart(into.length, width(name));
-    into.splice(Math.min(start + column, into.length), 0, id);
+    into.splice(Math.min(start + mapColumn(column, width(row), width(name)), into.length), 0, id);
     return next;
   }
 
@@ -110,7 +147,7 @@ var HomeLogic = (function () {
   }
 
   return {
-    sortInstalled: sortInstalled, arrange: arrange, hiddenApps: hiddenApps, moveInLayout: moveInLayout,
+    sortInstalled: sortInstalled, arrange: arrange, hiddenApps: hiddenApps, gridNeighbor: gridNeighbor, moveInLayout: moveInLayout,
     savedLists: savedLists, parseList: parseList
   };
 }());
