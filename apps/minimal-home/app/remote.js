@@ -1,8 +1,9 @@
-// The Remote buttons view inside Minimal Home: what each remote button does. The list shows the buttons
-// of the chosen remote: the LG MR24 Magic Remote, drawn next to the list (the selected row's button is
-// outlined, and choosing a drawn button with the arrows or the pointer opens its row), or Custom, your
-// own named buttons for anything the MR24 list doesn't cover. Each remote shows its own names, while
-// the bindings are shared: the TV sees the same code from either. The rules live in remote-logic.js.
+// The Remote buttons view inside Minimal Home: what each remote button does, in presets. A preset is a
+// set of bindings made from a template: LG MR24, drawn next to the list (the selected row's button is
+// outlined, and choosing a drawn button with the arrows or the pointer opens its row), or Blank, your
+// own named buttons for another remote or anything the MR24 list doesn't cover. Choosing a preset makes
+// its bindings the active ones. The presets are kept in localStorage; the active one's bindings are
+// the bindings file, which is what counts. The rules live in remote-logic.js.
 //
 // The bindings live in LG Input Hook's keybinds.json, which the hook loaded by
 // remote-hook/load-remote-hook.sh reapplies by itself at the next key press after the file changes (see
@@ -37,16 +38,17 @@ var RemoteButtons = (function () {
   var LIT_MS = 900;
   var CAPTURE_MS = 15000;
   var BACK_CODE = "412";
-  var REMOTE_KEY = "remote.model";
-  var CUSTOM_KEY = "remote.customButtons";
-  var REMOTES = [{ id: "mr24", name: "LG MR24" }, { id: "custom", name: "Custom" }];
+  var PRESETS_KEY = "remote.presets";
+  // What was saved before presets existed, read once to make the first presets.
+  var LEGACY_REMOTE_KEY = "remote.model";
+  var LEGACY_CUSTOM_KEY = "remote.customButtons";
   var WIDTH = 210;
   var HEIGHT = 960;
   var HINTS = {
     mr24: "The outlined button is the one selected in the list. Right moves into the drawing, where the arrows " +
       "or the pointer pick a button and OK changes it. Changes take effect right away. Test remote finds a " +
       "button by pressing it.",
-    custom: "Your own buttons, for another remote or buttons the MR24 list lacks. Add one at the end of the " +
+    blank: "Your own buttons, for another remote or buttons the MR24 list lacks. Add one at the end of the " +
       "list, then name or remove it here. Changes take effect right away.",
     test: "Every button now only lights up, and pressing a listed button selects its row. Press any button " +
       "three times quickly to stop the test.",
@@ -64,8 +66,15 @@ var RemoteButtons = (function () {
   var hooked = null;
   // Bindings made some other way, remembered so they stay on offer as Custom (see Logic.choices).
   var originals = {};
+  var presets = null;
+  // The active preset's template ("mr24" or "blank") and own named buttons.
   var remote = "mr24";
   var custom = [];
+  // While the preset row is being changed: the choice shown (an index into Logic.presetChoices), and
+  // the step: "choose", "template" (making a new preset) or "delete" (asking first).
+  var presetIndex = 0;
+  var presetStep = null;
+  var templateIndex = 0;
   var selected = null;
   // The row or the remote choice whose value Left/Right change, entered with OK as in Settings.
   var editing = null;
@@ -80,8 +89,8 @@ var RemoteButtons = (function () {
   var pointed = null;
   var lastPointed = null;
   var captureTimer = null;
-  // The code being renamed, while the name field is open.
-  var renaming = null;
+  // While a name field is open (a button's on the card, or a preset's): { field, done }.
+  var naming = null;
   // Where changes are saved: CONFIG, or BACKUP while the buttons are disabled (or could not be restored).
   var target = CONFIG;
   var saveTimer = null;
@@ -117,6 +126,22 @@ var RemoteButtons = (function () {
     catch (error) { setStatus("Could not save: " + error.message, "error"); }
   }
 
+  function storePresets() {
+    store(PRESETS_KEY, JSON.stringify(presets));
+  }
+
+  // Takes the active preset's template and buttons for the list.
+  function usePreset() {
+    var preset = Logic.activePreset(presets);
+    remote = preset.template;
+    custom = preset.buttons;
+  }
+
+  function saveButtons() {
+    Logic.activePreset(presets).buttons = custom;
+    storePresets();
+  }
+
   function listed() {
     return Logic.listedCodes(remote, binds, custom);
   }
@@ -127,7 +152,8 @@ var RemoteButtons = (function () {
 
   function updateSummary() {
     var count = Object.keys(binds || {}).length;
-    host.setLinkValue("remote", binds === null ? "—" : count ? count + " changed" : "None changed");
+    var preset = presets.list.length > 1 ? Logic.activePreset(presets).name + " · " : "";
+    host.setLinkValue("remote", binds === null ? "—" : preset + (count ? count + " changed" : "None changed"));
   }
 
   // Reads the bindings, first making the real ones active again if a test was cut short. Skipped
@@ -144,6 +170,10 @@ var RemoteButtons = (function () {
         var read = JSON.parse(output.slice(lineEnd + 1) || "{}");
         hooked = output.slice(0, lineEnd) === "hooked";
         binds = read && typeof read === "object" && !Array.isArray(read) ? read : {};
+        // The file holds the active preset's bindings; presets made before presets existed start from it.
+        presets.list.forEach(function (preset) { if (preset.binds === null) { preset.binds = JSON.parse(JSON.stringify(binds)); } });
+        Logic.activePreset(presets).binds = JSON.parse(JSON.stringify(binds));
+        storePresets();
         originals = Object.assign({}, originals, Logic.customBinds(binds, apps));
         target = CONFIG;
         fresh = true;
@@ -186,9 +216,12 @@ var RemoteButtons = (function () {
       .catch(function (error) { setStatus("Could not save: " + error.message, "error"); });
   }
 
+  // Saves the bindings to the file after SAVE_DELAY_MS, and to the active preset now.
   function scheduleSave() {
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(function () { queue(save); }, SAVE_DELAY_MS);
+    Logic.activePreset(presets).binds = JSON.parse(JSON.stringify(binds));
+    storePresets();
     updateSummary();
   }
 
@@ -258,11 +291,11 @@ var RemoteButtons = (function () {
   }
 
   function render() {
-    stopEditing();
+    if (editing !== $("remote-model")) { stopEditing(); }
     var box = $("remote-list");
     box.textContent = "";
     listed().forEach(function (code) { box.appendChild(makeRow(code)); });
-    if (remote === "custom") { box.appendChild(makeAddRow()); }
+    if (remote === "blank") { box.appendChild(makeAddRow()); }
     if (!isSide(selected)) { setFocus(rowFor(lastCode) || firstRow()); }
     showRemote();
   }
@@ -278,7 +311,7 @@ var RemoteButtons = (function () {
     });
     $("remote-model").addEventListener("click", function () {
       if (listening) { return; }
-      if (editing === $("remote-model")) { stopEditing(); }
+      if (editing === $("remote-model")) { presetOk(); }
       else { startEditing($("remote-model")); }
     });
     $("remote-rename").addEventListener("click", function () {
@@ -287,7 +320,8 @@ var RemoteButtons = (function () {
     $("remote-remove").addEventListener("click", function () {
       if (!listening && isCustom(lastCode)) { removeButton(lastCode); }
     });
-    $("remote-name").addEventListener("blur", function () { finishRename(true); });
+    $("remote-name").addEventListener("blur", function () { finishNaming(true); });
+    $("remote-preset-name").addEventListener("blur", function () { finishNaming(true); });
     // Another app or the screensaver taking over must not leave the buttons disabled.
     document.addEventListener("visibilitychange", function () {
       if (document.hidden && listening) { stopListening(""); }
@@ -343,7 +377,7 @@ var RemoteButtons = (function () {
 
   // OK on a drawn button (or a click on it) opens its row to change what it does.
   function pickFromDrawing(button) {
-    if (listening || renaming !== null || button.power || button.keep) { return; }
+    if (listening || naming || button.power || button.keep) { return; }
     var row = rowFor(String(button.codes[0]));
     setFocus(row);
     startEditing(row);
@@ -361,12 +395,12 @@ var RemoteButtons = (function () {
     }, LIT_MS);
   }
 
-  // Shows the remote beside the list: the drawing or the card, the remote choice, and the selection.
+  // Shows the preset beside the list: the drawing or the card, the preset row, and the selection.
   function showRemote() {
-    var isCustomRemote = remote === "custom";
-    $("remote-drawing").hidden = isCustomRemote;
-    $("remote-card").hidden = !isCustomRemote;
-    $("remote-model").querySelector(".value").textContent = REMOTES.filter(function (entry) { return entry.id === remote; })[0].name;
+    var isBlank = remote === "blank";
+    $("remote-drawing").hidden = isBlank;
+    $("remote-card").hidden = !isBlank;
+    showPresetRow();
     $("remote-hint").textContent = listening ? HINTS[listening] : HINTS[remote];
     showSelection();
   }
@@ -377,14 +411,14 @@ var RemoteButtons = (function () {
     var code = lastCode === "add" ? null : lastCode;
     var match = code && !listening && selected && !isSide(selected) ? drawnFor(code) : null;
     drawn.forEach(function (entry) { entry.element.classList.toggle("is-selected", entry === match); });
-    // Rename and Remove belong to the Custom remote, and need a button to act on.
-    $("remote-rename").hidden = remote !== "custom" || !code || !!listening;
-    $("remote-remove").hidden = remote !== "custom" || !isCustom(code) || !!listening;
-    if (remote === "custom") { showCard(code); }
+    // Rename and Remove belong to Blank presets, and need a button to act on.
+    $("remote-rename").hidden = remote !== "blank" || !code || !!listening;
+    $("remote-remove").hidden = remote !== "blank" || !isCustom(code) || !!listening;
+    if (remote === "blank") { showCard(code); }
   }
 
   function showCard(code) {
-    if (renaming !== null) { return; }
+    if (naming) { return; }
     $("remote-card-title").textContent = code ? Logic.nameFor(code, custom) : lastCode === "add" ? "New button" : "No button selected";
     $("remote-card-code").textContent = code ? "Code " + code : lastCode === "add" ? "OK, then press it on the remote" : "";
   }
@@ -398,7 +432,7 @@ var RemoteButtons = (function () {
     }
     var result = Logic.stopStreak(streak, code, Date.now());
     streak = result.streak;
-    if (remote === "custom") {
+    if (remote === "blank") {
       showCard(code);
       light($("remote-card"));
     } else if (drawnFor(code)) {
@@ -411,9 +445,9 @@ var RemoteButtons = (function () {
     } else if (row) {
       setFocus(row);
       setStatus("");
-    } else if (!Logic.isKept(code) && (remote === "custom" || !drawnFor(code))) {
+    } else if (!Logic.isKept(code) && (remote === "blank" || !drawnFor(code))) {
       setStatus(Logic.displayName(remote, code, custom) + " (code " + code + ") is not in the list" +
-        (remote === "custom" ? " · add it with Add a button" : ""));
+        (remote === "blank" ? " · add it with Add a button" : ""));
     }
   }
 
@@ -471,62 +505,66 @@ var RemoteButtons = (function () {
     });
   }
 
-  // The button to add was pressed: add it to the Custom remote and ask for its name.
+  // The button to add was pressed: add it to the preset and ask for its name.
   function captured(code) {
     stopListening("");
     if (isCustom(code)) {
       setFocus(rowFor(code));
-      setStatus(Logic.nameFor(code, custom) + " is already on your remote");
+      setStatus(Logic.nameFor(code, custom) + " is already in this preset");
       return;
     }
     custom = Logic.withButton(custom, code, "");
-    store(CUSTOM_KEY, JSON.stringify(custom));
+    saveButtons();
     lastCode = code;
     render();
     startRename(code);
   }
 
-  function startRename(code) {
+  // Opens a name field; focusing it brings up the TV's keyboard. done(keep, value) runs when it closes.
+  function startNaming(field, value, done) {
     stopEditing();
-    renaming = code;
-    var field = $("remote-name");
-    field.value = Logic.nameFor(code, custom);
-    $("remote-card-title").hidden = true;
+    naming = { field: field, done: done };
+    field.value = value;
     field.hidden = false;
-    // Focusing the field brings up the TV's keyboard.
     field.focus();
     field.select();
     showMode();
     setStatus("Type a name, then OK");
   }
 
-  function finishRename(keep) {
-    if (renaming === null) { return; }
-    var code = renaming;
-    var field = $("remote-name");
-    renaming = null;
-    field.hidden = true;
-    $("remote-card-title").hidden = false;
-    field.blur();
-    if (keep) {
-      custom = Logic.withButton(custom, code, field.value);
-      store(CUSTOM_KEY, JSON.stringify(custom));
-      lastCode = code;
-      render();
-      setStatus("Saved", "ok");
-    } else {
-      setStatus("");
-    }
+  function finishNaming(keep) {
+    if (!naming) { return; }
+    var current = naming;
+    naming = null;
+    current.field.hidden = true;
+    current.field.blur();
+    current.done(keep, current.field.value);
     showMode();
   }
 
-  // Takes a button off the Custom remote; whatever it was set to do is undone too.
+  function startRename(code) {
+    $("remote-card-title").hidden = true;
+    startNaming($("remote-name"), Logic.nameFor(code, custom), function (keep, value) {
+      $("remote-card-title").hidden = false;
+      if (!keep) {
+        setStatus("");
+        return;
+      }
+      custom = Logic.withButton(custom, code, value);
+      saveButtons();
+      lastCode = code;
+      render();
+      setStatus("Saved", "ok");
+    });
+  }
+
+  // Takes a button off the preset; whatever it was set to do is undone too.
   function removeButton(code) {
     var name = Logic.nameFor(code, custom);
     var row = rowFor(code);
     var next = row && (row.nextElementSibling || row.previousElementSibling);
     custom = Logic.withoutButton(custom, code);
-    store(CUSTOM_KEY, JSON.stringify(custom));
+    saveButtons();
     if (binds && binds[code]) {
       delete binds[code];
       scheduleSave();
@@ -537,14 +575,110 @@ var RemoteButtons = (function () {
     setStatus("Removed " + name);
   }
 
-  function switchRemote(step) {
-    var index = REMOTES.map(function (entry) { return entry.id; }).indexOf(remote);
-    remote = REMOTES[(index + step + REMOTES.length) % REMOTES.length].id;
-    store(REMOTE_KEY, remote);
-    lastCode = listed()[0] || (remote === "custom" ? "add" : null);
+  // Makes a preset the active one: its bindings go to the file and the list shows its buttons.
+  function activatePreset(id) {
+    presets.active = id;
+    storePresets();
+    usePreset();
+    binds = JSON.parse(JSON.stringify(Logic.activePreset(presets).binds || {}));
+    originals = Object.assign({}, originals, Logic.customBinds(binds, apps));
+    lastCode = listed()[0] || (remote === "blank" ? "add" : null);
     render();
-    // render() ends editing; keep changing the remote.
-    startEditing($("remote-model"));
+    scheduleSave();
+  }
+
+  // The preset row: its label and the preset, choice, template or question it shows.
+  function showPresetRow() {
+    var row = $("remote-model");
+    var label = row.querySelector("span");
+    var value = row.querySelector(".value");
+    var active = Logic.activePreset(presets);
+    label.textContent = presetStep === "template" ? "Template" : "Preset";
+    value.textContent = presetStep === "template" ? Logic.TEMPLATES[templateIndex].name :
+      presetStep === "delete" ? "Delete " + active.name + "?" :
+      presetStep === "choose" ? Logic.presetChoices(presets)[presetIndex].label : active.name;
+  }
+
+  // Left/Right on the preset row: step through the presets (each becomes active right away) and the
+  // actions after them, or through the templates when making a new preset.
+  function stepPreset(step) {
+    if (presetStep === "template") {
+      templateIndex = (templateIndex + step + Logic.TEMPLATES.length) % Logic.TEMPLATES.length;
+      showPresetRow();
+      return;
+    }
+    var choices = Logic.presetChoices(presets);
+    presetStep = "choose";
+    presetIndex = (presetIndex + step + choices.length) % choices.length;
+    var choice = choices[presetIndex];
+    if (choice.kind === "preset" && choice.id !== presets.active) { activatePreset(choice.id); }
+    showPresetRow();
+    var name = Logic.activePreset(presets).name;
+    setStatus(choice.kind === "new" ? "OK makes a new preset from a template" :
+      choice.kind === "rename" ? "OK renames " + name : choice.kind === "delete" ? "OK deletes " + name + " (it asks first)" :
+      "Using " + name + " · Left/Right changes the preset");
+  }
+
+  function namePreset(value, done) {
+    $("remote-model").hidden = true;
+    startNaming($("remote-preset-name"), value, function (keep, name) {
+      $("remote-model").hidden = false;
+      done(keep, name);
+      showRemote();
+      updateSummary();
+      setFocus($("remote-model"));
+    });
+  }
+
+  // OK on the preset row while changing it: does what the row shows.
+  function presetOk() {
+    var active = Logic.activePreset(presets);
+    if (presetStep === "template") {
+      var template = Logic.TEMPLATES[templateIndex];
+      namePreset(template.id === "mr24" ? "My " + template.name : "My remote", function (keep, name) {
+        if (!keep) {
+          setStatus("");
+          return;
+        }
+        presets = Logic.withNewPreset(presets, template.id, name);
+        activatePreset(presets.active);
+        setStatus("Made " + Logic.activePreset(presets).name, "ok");
+      });
+      return;
+    }
+    if (presetStep === "delete") {
+      presets = Logic.withoutPreset(presets, active.id);
+      activatePreset(presets.active);
+      presetStep = "choose";
+      presetIndex = Logic.presetChoices(presets).map(function (choice) { return choice.id; }).indexOf(presets.active);
+      showPresetRow();
+      setStatus("Deleted " + active.name + " · using " + Logic.activePreset(presets).name);
+      return;
+    }
+    var choice = Logic.presetChoices(presets)[presetIndex];
+    if (choice.kind === "new") {
+      presetStep = "template";
+      templateIndex = 0;
+      showPresetRow();
+      setStatus("Choose a template · Left/Right changes · OK names the preset");
+    } else if (choice.kind === "rename") {
+      namePreset(active.name, function (keep, name) {
+        if (!keep) {
+          setStatus("");
+          return;
+        }
+        presets = Logic.withPresetRenamed(presets, active.id, name);
+        storePresets();
+        usePreset();
+        setStatus("Renamed to " + Logic.activePreset(presets).name, "ok");
+      });
+    } else if (choice.kind === "delete") {
+      presetStep = "delete";
+      showPresetRow();
+      setStatus("OK deletes " + active.name + " · Left/Right or Back keeps it");
+    } else {
+      stopEditing();
+    }
   }
 
   function isSide(element) {
@@ -567,10 +701,11 @@ var RemoteButtons = (function () {
     updateHints();
   }
 
+
   function updateHints() {
     var hints = listening === "test" ? ["", "", "<b>Any button 3×</b> Stop test"] :
       listening === "capture" ? ["", "", "<b>Back</b> Cancel"] :
-      renaming !== null ? ["", "<b>OK</b> Save", "<b>Back</b> Cancel"] :
+      naming ? ["", "<b>OK</b> Save", "<b>Back</b> Cancel"] :
       editing ? ["<b>Left/Right</b> Change", "<b>OK</b> Done", "<b>Back</b> Done"] :
       ["<b>Arrows</b> Move", "<b>OK</b> Select", "<b>Back</b> Settings"];
     ["move", "select", "back"].forEach(function (name, index) {
@@ -580,8 +715,9 @@ var RemoteButtons = (function () {
     });
   }
 
+  // Rows and the preset row change bindings, so they wait until the bindings were read.
   function startEditing(element) {
-    if (element !== $("remote-model") && !fresh) {
+    if (!fresh) {
       setStatus(readError ? "Could not read the bindings (" + readError + ") · reopen this page to retry" : "Reading the bindings…",
         readError ? "error" : "");
       return;
@@ -589,15 +725,25 @@ var RemoteButtons = (function () {
     setFocus(element);
     editing = element;
     element.classList.add("is-editing");
+    if (element === $("remote-model")) {
+      presetStep = "choose";
+      presetIndex = Logic.presetChoices(presets).map(function (choice) { return choice.id; }).indexOf(presets.active);
+      showPresetRow();
+    }
     updateHints();
-    setStatus(element === $("remote-model") ? "Choosing the remote · Left/Right changes" :
+    setStatus(element === $("remote-model") ? "Using " + Logic.activePreset(presets).name + " · Left/Right changes the preset" :
       "Editing " + element.querySelector("strong").textContent + " · Left/Right changes");
   }
 
   function stopEditing() {
     if (!editing) { return; }
+    var wasPresetRow = editing === $("remote-model");
     editing.classList.remove("is-editing");
     editing = null;
+    if (wasPresetRow) {
+      presetStep = null;
+      showPresetRow();
+    }
     updateHints();
     setStatus("");
   }
@@ -638,10 +784,10 @@ var RemoteButtons = (function () {
   // keys other than OK and Back are left to it.
   function handleKey(event) {
     var key = event.keyCode;
-    if (renaming !== null) {
+    if (naming) {
       if (key === KEY.ENTER || key === KEY.BACK) {
         event.preventDefault();
-        finishRename(key === KEY.ENTER);
+        finishNaming(key === KEY.ENTER);
       }
       return null;
     }
@@ -660,7 +806,7 @@ var RemoteButtons = (function () {
     }
     if (!selected || (key === KEY.ENTER && event.repeat)) { return null; }
     if (editing && (key === KEY.LEFT || key === KEY.RIGHT)) {
-      if (editing === $("remote-model")) { switchRemote(key === KEY.RIGHT ? 1 : -1); }
+      if (editing === $("remote-model")) { stepPreset(key === KEY.RIGHT ? 1 : -1); }
       else { change(key === KEY.RIGHT ? 1 : -1); }
     } else if (key === KEY.ENTER) {
       if (selected === $("remote-drawing")) { pickFromDrawing(pointed.button); }
@@ -700,7 +846,7 @@ var RemoteButtons = (function () {
   }
 
   function handlePointer(event) {
-    if (renaming !== null) { return; }
+    if (naming) { return; }
     var element = event.target.closest && event.target.closest("#remote-view .focusable");
     // While listening the list follows the buttons pressed, not the pointer.
     if (listening && element !== $("remote-test")) { return; }
@@ -713,17 +859,28 @@ var RemoteButtons = (function () {
   }
 
   // host: Home's apps() (offered as "Open …" actions) and setLinkValue() for the Settings summary.
+  // Also reads the presets, so the Settings summary can name the active one.
   function attach(pageHost) {
     host = pageHost;
+    var saved = readStored(PRESETS_KEY);
+    presets = Logic.parsePresets(saved, readStored(LEGACY_REMOTE_KEY), readStored(LEGACY_CUSTOM_KEY));
+    if (!saved) {
+      storePresets();
+      try {
+        window.localStorage.removeItem(LEGACY_REMOTE_KEY);
+        window.localStorage.removeItem(LEGACY_CUSTOM_KEY);
+      } catch (error) { console.warn("Could not remove the old remote settings: " + error.message); }
+    }
+    usePreset();
   }
 
   function open() {
     apps = host.apps().slice().sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
     build();
-    remote = readStored(REMOTE_KEY) === "custom" ? "custom" : "mr24";
-    custom = Logic.parseCustom(readStored(CUSTOM_KEY));
+    usePreset();
     listening = null;
-    renaming = null;
+    naming = null;
+    presetStep = null;
     fresh = false;
     point(null);
     lastPointed = null;
@@ -743,7 +900,7 @@ var RemoteButtons = (function () {
 
   // Ends a test and saves pending changes. Returns when the bindings are in place.
   function close() {
-    finishRename(true);
+    finishNaming(true);
     return listening ? stopListening("") : queue(flush);
   }
 

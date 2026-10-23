@@ -171,6 +171,12 @@
     tile.addEventListener("mousedown", function () {
       if (!arranging) { startHold(tile, true); }
     });
+    // Arrows beside a picked-up tile show that it moves.
+    var arrows = document.createElement("span");
+    arrows.className = "move-arrows";
+    arrows.setAttribute("aria-hidden", "true");
+    arrows.innerHTML = '<i class="left">◀</i><i class="right">▶</i>';
+    tile.appendChild(arrows);
     return tile;
   }
 
@@ -224,6 +230,7 @@
     document.getElementById("hidden-section").hidden = !arranging;
     document.getElementById("hidden-empty").hidden = !!hiddenRow.children.length;
     Object.keys(tiles).forEach(function (id) { tiles[id].classList.toggle("is-editing", id === pickedId); });
+    document.getElementById("home-view").classList.toggle("is-moving", !!pickedId);
     status.classList.toggle("visible", installed.length === 0);
     status.textContent = installed.length ? "" : "No apps found";
     if (view !== "home") { return; }
@@ -265,7 +272,8 @@
   function showEditHint() {
     var hint = document.getElementById("edit-hint");
     hint.hidden = !arranging;
-    hint.textContent = pickedId ? "Arrows move it · Down to Hidden hides it · OK puts it down" :
+    var picked = installed.filter(function (app) { return app.id === pickedId; })[0];
+    hint.textContent = picked ? "Moving " + (picked.title || picked.id) + " · Arrows move it · Down to Hidden hides it · OK puts it down" :
       "OK picks an app up · Back finishes";
   }
 

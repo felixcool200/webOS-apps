@@ -1,6 +1,7 @@
-// The Remote buttons page's rules without the page: the MR24 remote's buttons, which buttons a remote
-// lists and what they can do, reading presses from the hook's log, and the Custom remote's own named
-// buttons. remote.js uses them; test/remote-logic.test.js checks them in Node.
+// The Remote buttons page's rules without the page: the MR24 remote's buttons, which buttons a preset
+// lists and what they can do, reading presses from the hook's log, and the presets. A preset is a set
+// of bindings made from a template: LG MR24 (its drawing and buttons) or Blank (your own named
+// buttons). remote.js uses them; test/remote-logic.test.js checks them in Node.
 var RemoteLogic = (function () {
   "use strict";
 
@@ -57,6 +58,7 @@ var RemoteLogic = (function () {
   // page, so then it is disabled too.
   var HOME = "773";
   var NAME_LENGTH = 40;
+  var TEMPLATES = [{ id: "mr24", name: "LG MR24" }, { id: "blank", name: "Blank" }];
   // Views of Minimal Home a button can open: Home is launched with {"view": …} (see app.js).
   var HOME_VIEWS = [{ label: "Open Sources", view: "sources" }, { label: "Open Home settings", view: "settings" }];
   // Buttons another remote's buttons can act as, so that remote can work the TV's menus and this page.
@@ -82,10 +84,10 @@ var RemoteLogic = (function () {
     return button ? button.name : "Button " + code;
   }
 
-  // The name a remote shows for a code: your own names only on the Custom remote, so renaming a
-  // button there leaves the MR24 list as it is.
-  function displayName(remote, code, custom) {
-    return nameFor(code, remote === "custom" ? custom : []);
+  // The name a preset shows for a code: your own names only with the Blank template, so renaming a
+  // button there leaves MR24 presets as they are.
+  function displayName(template, code, custom) {
+    return nameFor(code, template === "blank" ? custom : []);
   }
 
   // The drawn MR24 button nearest to `from` in a direction ("up", "down", "left" or "right"), or null
@@ -106,10 +108,10 @@ var RemoteLogic = (function () {
     return best;
   }
 
-  // The codes a remote lists (`remote` is "mr24" or "custom"): its own buttons in order, then any other
-  // bound code, so every binding can be seen and undone. Kept buttons are never listed.
-  function listedCodes(remote, binds, custom) {
-    var codes = remote === "custom" ? custom.map(function (button) { return button.code; }) :
+  // The codes a preset lists (`template` is "mr24" or "blank"): its own buttons in order, then any
+  // other bound code, so every binding can be seen and undone. Kept buttons are never listed.
+  function listedCodes(template, binds, custom) {
+    var codes = template === "blank" ? custom.map(function (button) { return button.code; }) :
       MR24.filter(function (button) { return !button.keep && button.codes.length; })
         .map(function (button) { return String(button.codes[0]); });
     Object.keys(binds || {}).forEach(function (code) {
@@ -233,6 +235,92 @@ var RemoteLogic = (function () {
     return custom.filter(function (button) { return button.code !== String(code); });
   }
 
+  function copy(value) {
+    return value === null || value === undefined ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function templateName(id) {
+    return TEMPLATES.filter(function (template) { return template.id === id; })[0].name;
+  }
+
+  function isPreset(preset) {
+    return preset && typeof preset.id === "string" && typeof preset.name === "string" &&
+      TEMPLATES.some(function (template) { return template.id === preset.template; });
+  }
+
+  // The presets as saved (JSON text): { active, list: [{ id, name, template, buttons, binds }] }. A
+  // preset's binds is null until the bindings file is read; the file then gives them. Without saved
+  // presets they are made from what was saved before presets existed (`legacyRemote` "mr24" or
+  // "custom", and the Custom buttons): an LG MR24 preset, and a Blank one named Custom with those
+  // buttons, both starting from the file's bindings.
+  function parsePresets(text, legacyRemote, legacyCustomText) {
+    var saved = null;
+    try { saved = JSON.parse(text); } catch (error) { saved = null; }
+    var list = saved && Array.isArray(saved.list) ? saved.list.filter(isPreset).map(function (preset) {
+      return {
+        id: preset.id, name: cleanName(preset.name, preset.id), template: preset.template,
+        buttons: parseCustom(JSON.stringify(preset.buttons || [])),
+        binds: preset.binds && typeof preset.binds === "object" && !Array.isArray(preset.binds) ? preset.binds : null
+      };
+    }) : [];
+    if (list.length) {
+      var active = list.some(function (preset) { return preset.id === saved.active; }) ? saved.active : list[0].id;
+      return { active: active, list: list };
+    }
+    list = [{ id: "p1", name: templateName("mr24"), template: "mr24", buttons: [], binds: null }];
+    var legacyCustom = parseCustom(legacyCustomText);
+    if (legacyCustom.length || legacyRemote === "custom") {
+      list.push({ id: "p2", name: "Custom", template: "blank", buttons: legacyCustom, binds: null });
+    }
+    return { active: legacyRemote === "custom" ? "p2" : "p1", list: list };
+  }
+
+  function activePreset(presets) {
+    return presets.list.filter(function (preset) { return preset.id === presets.active; })[0];
+  }
+
+  // The presets with a new one made from a template, which becomes the active one. An LG MR24
+  // preset starts with the default bindings, a Blank one with none.
+  function withNewPreset(presets, template, name) {
+    var number = presets.list.reduce(function (highest, preset) {
+      return Math.max(highest, parseInt(preset.id.slice(1), 10) || 0);
+    }, 0) + 1;
+    var preset = {
+      id: "p" + number, name: String(name || "").replace(/\s+/g, " ").trim().slice(0, NAME_LENGTH) || templateName(template),
+      template: template, buttons: [], binds: template === "mr24" ? defaultBinds() : {}
+    };
+    return { active: preset.id, list: copy(presets.list).concat([preset]) };
+  }
+
+  function withPresetRenamed(presets, id, name) {
+    var clean = String(name || "").replace(/\s+/g, " ").trim().slice(0, NAME_LENGTH);
+    if (!clean) { return presets; }
+    return { active: presets.active, list: copy(presets.list).map(function (preset) {
+      if (preset.id === id) { preset.name = clean; }
+      return preset;
+    }) };
+  }
+
+  // The presets without one. The last preset can't be deleted; deleting the active one activates
+  // the preset before it (or after it, for the first).
+  function withoutPreset(presets, id) {
+    if (presets.list.length < 2) { return presets; }
+    var index = presets.list.map(function (preset) { return preset.id; }).indexOf(id);
+    var list = copy(presets.list).filter(function (preset) { return preset.id !== id; });
+    var active = presets.active === id ? list[Math.max(0, index - 1)].id : presets.active;
+    return { active: active, list: list };
+  }
+
+  // What Left/Right step through on the preset row: every preset, then making a new one, and
+  // renaming or deleting the active one (deleting only when there is another).
+  function presetChoices(presets) {
+    var list = presets.list.map(function (preset) { return { kind: "preset", id: preset.id, label: preset.name }; });
+    list.push({ kind: "new", label: "New preset…" });
+    list.push({ kind: "rename", label: "Rename this preset…" });
+    if (presets.list.length > 1) { list.push({ kind: "delete", label: "Delete this preset…" }); }
+    return list;
+  }
+
   // A pressed code that can be added to the Custom remote: not one of the kept buttons.
   function canAdd(code) {
     return !isKept(code);
@@ -242,7 +330,9 @@ var RemoteLogic = (function () {
     MR24: MR24, HOME: HOME, SCREEN_TOGGLE: SCREEN_TOGGLE, buttonFor: buttonFor, isKept: isKept, nameFor: nameFor,
     displayName: displayName, nearestButton: nearestButton, stopStreak: stopStreak, STOP_PRESSES: STOP_PRESSES,
     listedCodes: listedCodes, testCodes: testCodes, disabledBinds: disabledBinds, sameBind: sameBind, indexOf: indexOf,
-    choices: choices, defaultBinds: defaultBinds, customBinds: customBinds, readPresses: readPresses, parseCustom: parseCustom,
+    choices: choices, defaultBinds: defaultBinds, customBinds: customBinds, TEMPLATES: TEMPLATES, templateName: templateName,
+    parsePresets: parsePresets, activePreset: activePreset, withNewPreset: withNewPreset, withPresetRenamed: withPresetRenamed,
+    withoutPreset: withoutPreset, presetChoices: presetChoices, readPresses: readPresses, parseCustom: parseCustom,
     withButton: withButton, withoutButton: withoutButton, canAdd: canAdd
   };
 }());

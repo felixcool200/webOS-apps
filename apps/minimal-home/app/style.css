@@ -152,11 +152,29 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .grid-view .top-action.focusable.is-focused { transform: scale(1.08); }
 .grid.small .app.is-focused .app-name { color: var(--text); }
 
-/* A tile picked up in edit mode. */
+/* An app picked up while arranging: lifted, filled with the accent colour, with arrows beside it,
+   while the other apps step back, so moving can't be mistaken for selecting. */
+#home-view.is-moving .app:not(.is-editing) { opacity: 0.4; }
 .grid-view .app.is-editing {
-  box-shadow: 0 0 0 0.4vh var(--accent), 0 1.8vh 4vh rgba(0, 0, 0, 0.5);
-  transform: scale(1.1) translateY(-0.8vh);
+  background: rgba(114, 214, 255, 0.26);
+  box-shadow: 0 0 0 0.5vh var(--accent), 0 2.2vh 5vh rgba(0, 0, 0, 0.6);
+  transform: scale(1.12) translateY(-1vh);
+  z-index: 3;
 }
+
+.move-arrows { display: none; }
+.app.is-editing .move-arrows { display: block; position: absolute; inset: 0; pointer-events: none; }
+.move-arrows i {
+  position: absolute;
+  top: 50%;
+  color: var(--accent);
+  font-size: 1.7vh;
+  font-style: normal;
+  transform: translateY(-50%);
+}
+
+.move-arrows .left { left: -1.3vw; }
+.move-arrows .right { right: -1.3vw; }
 
 /* The Sources view: the TV's inputs as tiles. LG's input icons are dark line drawings, shown white. */
 .source .source-icon { width: 6.4vh; height: 6.4vh; border-radius: 0; filter: brightness(0) invert(0.92); }

@@ -19,9 +19,9 @@ test("a code bound some other way is listed too, unless it is a kept button", ()
   assert.ok(!codes.includes("28"));
 });
 
-test("the Custom remote lists its own buttons in order, then other bound codes", () => {
+test("a Blank preset lists its own buttons in order, then other bound codes", () => {
   const custom = [{ code: "500", name: "Ambilight" }, { code: "1044", name: "Screen" }];
-  assert.deepStrictEqual(RemoteLogic.listedCodes("custom", { "1038": { action: "ignore" } }, custom), ["500", "1044", "1038"]);
+  assert.deepStrictEqual(RemoteLogic.listedCodes("blank", { "1038": { action: "ignore" } }, custom), ["500", "1044", "1038"]);
 });
 
 test("a test disables the listed codes, every bindable MR24 button and Home", () => {
@@ -85,9 +85,9 @@ test("kept buttons can't be added to the Custom remote", () => {
   assert.strictEqual(RemoteLogic.canAdd("4242"), true);
 });
 
-test("each remote shows its own names, so renaming on Custom leaves the MR24 list alone", () => {
+test("only Blank presets show your own names, so renaming there leaves MR24 presets alone", () => {
   const custom = [{ code: "1044", name: "Screen" }];
-  assert.strictEqual(RemoteLogic.displayName("custom", "1044", custom), "Screen");
+  assert.strictEqual(RemoteLogic.displayName("blank", "1044", custom), "Screen");
   assert.strictEqual(RemoteLogic.displayName("mr24", "1044", custom), "Rakuten TV");
   assert.strictEqual(RemoteLogic.displayName("mr24", "4242", custom), "Button 4242");
 });
@@ -145,4 +145,47 @@ test("a new TV starts with Input opening Sources and Settings opening Home's set
   const script = require("fs").readFileSync(require("path").join(__dirname, "../app/remote-hook/load-remote-hook.sh"), "utf8");
   const written = /<<'EOF'\n([\s\S]*?)\nEOF/.exec(script)[1];
   assert.deepStrictEqual(JSON.parse(written), defaults, "the boot script writes the same defaults");
+});
+
+test("before presets existed: an LG MR24 preset, and Custom buttons become a Blank preset", () => {
+  const custom = JSON.stringify([{ code: "1044", name: "Skärm av" }]);
+  const presets = RemoteLogic.parsePresets(null, "mr24", custom);
+  assert.deepStrictEqual(presets.list.map((preset) => [preset.name, preset.template, preset.binds]), [["LG MR24", "mr24", null], ["Custom", "blank", null]]);
+  assert.strictEqual(presets.active, "p1");
+  assert.deepStrictEqual(presets.list[1].buttons, [{ code: "1044", name: "Skärm av" }]);
+  assert.strictEqual(RemoteLogic.parsePresets(null, null, null).list.length, 1, "a new TV starts with one preset");
+  assert.strictEqual(RemoteLogic.parsePresets(null, "custom", null).active, "p2");
+});
+
+test("saved presets are read back, and a broken active id falls back to the first", () => {
+  const saved = { active: "p9", list: [{ id: "p1", name: "Movie night", template: "mr24", buttons: [], binds: { "1037": { action: "ignore" } } }, { id: "p2", name: "?", template: "nope" }] };
+  const presets = RemoteLogic.parsePresets(JSON.stringify(saved), null, null);
+  assert.deepStrictEqual(presets.list.map((preset) => preset.name), ["Movie night"]);
+  assert.strictEqual(presets.active, "p1");
+});
+
+test("a new preset becomes active, MR24 ones with the default bindings and Blank ones with none", () => {
+  let presets = RemoteLogic.parsePresets(null, null, null);
+  presets = RemoteLogic.withNewPreset(presets, "mr24", "  Movie   night ");
+  assert.strictEqual(presets.active, "p2");
+  assert.strictEqual(RemoteLogic.activePreset(presets).name, "Movie night");
+  assert.deepStrictEqual(RemoteLogic.activePreset(presets).binds, RemoteLogic.defaultBinds());
+  presets = RemoteLogic.withNewPreset(presets, "blank", "");
+  assert.deepStrictEqual([RemoteLogic.activePreset(presets).name, RemoteLogic.activePreset(presets).binds], ["Blank", {}]);
+});
+
+test("presets can be renamed, and deleted unless it is the last one", () => {
+  let presets = RemoteLogic.withNewPreset(RemoteLogic.parsePresets(null, null, null), "blank", "Living room");
+  presets = RemoteLogic.withPresetRenamed(presets, "p2", "Bedroom");
+  assert.strictEqual(RemoteLogic.activePreset(presets).name, "Bedroom");
+  presets = RemoteLogic.withoutPreset(presets, "p2");
+  assert.deepStrictEqual([presets.active, presets.list.length], ["p1", 1], "deleting the active one activates the one before");
+  assert.strictEqual(RemoteLogic.withoutPreset(presets, "p1"), presets, "the last preset stays");
+});
+
+test("the preset row offers every preset, then new, rename and delete", () => {
+  const one = RemoteLogic.parsePresets(null, null, null);
+  assert.deepStrictEqual(RemoteLogic.presetChoices(one).map((choice) => choice.label), ["LG MR24", "New preset…", "Rename this preset…"]);
+  const two = RemoteLogic.withNewPreset(one, "blank", "Living room");
+  assert.deepStrictEqual(RemoteLogic.presetChoices(two).map((choice) => choice.kind), ["preset", "preset", "new", "rename", "delete"]);
 });
