@@ -1,0 +1,3 @@
+[submodule "vendor/lginputhook"]
+	path = vendor/lginputhook
+	url = https://github.com/Simon34545/lginputhook

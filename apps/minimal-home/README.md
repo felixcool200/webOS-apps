@@ -6,6 +6,16 @@ The local hidden-app list excludes Alexa, Camera, Sports, Home Hub, LG Channels,
 
 The large top row holds the apps used day to day. YouTube, Netflix, Disney+, Sveriges Radio, Viaplay, and Spotify start it in that order; other apps keep their order from webOS. A smaller Tools row at the bottom holds setup apps, by default LG's Apps list, Homebrew Channel, LG Input Hook, and Life's Good Without Spying.
 
+## Remote buttons
+
+Settings has a Remote buttons page that decides what each button on the remote (an LG MR24 Magic Remote) does: Normal, Disabled, Screen on/off (LG's own Screen Off mode, picture dark and sound on), or Open an app. It lists every button except Power, which never reaches the TV's software, and OK, the arrows, Back, and Home, which stay as they are so the remote remains usable.
+
+As in the Settings view, OK on a row lets Left/Right change its action, and OK or Back finishes. Next to the list is a drawing of the remote that outlines the button of the selected row. Changes take effect right away.
+
+Test remote, above the drawing (Right from the list), finds a button by pressing it: buttons light up on the drawing as the TV receives them, and pressing a listed button selects its row. During the test every listed button and Home are temporarily disabled and the page ignores the other buttons, so every press only lights a button up. Press Back twice to stop the test (or choose Stop test with the pointer, or leave the page). If Home is reloaded or the TV restarts during a test, the bindings are put back at Home's next start or at boot.
+
+The bindings are stored in `/home/root/.config/lginputhook/keybinds.json` and applied by LG Input Hook's library, which Minimal Home ships in `remote-hook/` (see "Remote button hook" in the repository README). The library reloads the file by itself whenever it changes.
+
 ## Edit mode
 
 Hold OK (or the pointer button) on an app for about half a second to pick it up, like LG's old launcher. Left/Right move it, Down moves it between the two rows, Up hides it, and OK or Back puts it down. A short press still opens the app.

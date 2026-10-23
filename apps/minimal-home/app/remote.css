@@ -1,0 +1,178 @@
+/* The Remote buttons view. Every rule is scoped to #remote-view; the rows match the Settings view. */
+#remote-view {
+  --surface: rgba(255, 255, 255, 0.085);
+  width: 100%;
+  height: 100%;
+  padding: 4vh 4vw 3vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#remote-view header {
+  flex: none;
+  height: 12vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.remote-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 4vw;
+}
+
+.remote-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3vw;
+}
+
+.remote-stage {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vh;
+}
+
+#remote-test {
+  height: 5.6vh;
+  border-radius: 2.8vh;
+  background: var(--surface);
+  font-size: 1.6vh;
+  font-weight: 600;
+}
+
+#remote-test.is-active { color: var(--accent); }
+#remote-test.is-active::before { content: "● "; }
+
+.remote-hint { max-width: 22vw; margin: 0; color: var(--muted); font-size: 1.6vh; line-height: 1.5; }
+
+#remote-view .panel {
+  position: relative;
+  flex: none;
+  min-height: 0;
+  width: 46vw;
+  align-self: flex-start;
+  max-height: 100%;
+  overflow-y: auto;
+  border-radius: 1.5vh;
+  scrollbar-width: none;
+}
+
+#remote-view .panel::-webkit-scrollbar { display: none; }
+
+#remote-view .setting {
+  position: relative;
+  width: 100%;
+  min-height: 6.4vh;
+  padding: 1vh 1.4vw;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1vw;
+  text-align: left;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+#remote-view .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
+#remote-view .setting:last-child { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+#remote-view strong { font-size: 1.75vh; font-weight: 600; }
+#remote-view .value { color: var(--text); font-size: 1.55vh; white-space: nowrap; }
+#remote-view .setting.is-editing .value {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 0.7vh rgba(114, 214, 255, 0.85);
+}
+
+#remote-view .setting.is-editing .value::before { content: "‹  "; }
+#remote-view .setting.is-editing .value::after { content: "  ›"; }
+
+#remote-view .focusable.is-focused {
+  outline: none;
+  background: rgba(255, 255, 255, 0.19);
+  box-shadow: inset 0 0 0 0.24vh var(--accent), 0 1vh 2.5vh rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}
+
+#remote-view footer {
+  flex: none;
+  height: 7vh;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.3vw;
+  color: var(--muted);
+  font-size: 1.25vh;
+}
+
+#remote-view footer b { color: var(--text); font-weight: 600; }
+#remote-status { margin-left: auto; }
+#remote-status.error { color: var(--error); }
+#remote-status.ok { color: var(--ok); }
+
+/* The remote, drawn on a 210 x 960 grid traced from a photo; buttons are placed in percent. */
+#remote-drawing {
+  position: relative;
+  flex: none;
+  height: 64vh;
+  width: calc(64vh * 210 / 960);
+  border-radius: 8vh;
+  background: linear-gradient(180deg, #1b2027, #111419);
+  box-shadow: inset 0 0 0 0.2vh rgba(255, 255, 255, 0.10), 0 2vh 5vh rgba(0, 0, 0, 0.45);
+}
+
+#remote-view .remote-button {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.8vh;
+  background: #2b313a;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 1.05vh;
+  font-weight: 600;
+  transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+#remote-view .remote-button.round { border-radius: 50%; }
+#remote-view .remote-button.power { background: #2b1416; box-shadow: inset 0 0 0 0.3vh #e5484d; }
+
+/* The button of the row selected in the list. */
+#remote-view .remote-button.is-selected {
+  color: var(--accent);
+  box-shadow: 0 0 0 0.35vh var(--accent);
+  z-index: 1;
+}
+
+#remote-view .remote-button.lit {
+  background: var(--accent);
+  color: var(--bg);
+  box-shadow: 0 0 2.6vh var(--accent);
+  transform: scale(1.18);
+  z-index: 2;
+}
+
+#remote-view .wheel-ring {
+  position: absolute;
+  left: calc((105 - 76) / 210 * 100%);
+  top: calc((495 - 76) / 960 * 100%);
+  width: calc(152 / 210 * 100%);
+  height: calc(152 / 960 * 100%);
+  border-radius: 50%;
+  background: #20252c;
+}
+
+#remote-view .remote-logo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4%;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 2vh;
+  font-weight: 700;
+  text-align: center;
+}

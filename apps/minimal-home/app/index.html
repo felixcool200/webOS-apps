@@ -6,6 +6,7 @@
   <title>Minimal Home</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="remote.css">
 </head>
 <body>
   <main id="home-view" class="grid-view">
@@ -40,6 +41,29 @@
     <div id="hidden-apps" class="grid" role="list"></div>
   </main>
 
+  <main id="remote-view" hidden>
+    <header>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Remote buttons</p>
+    </header>
+    <div class="remote-body">
+      <div id="remote-list" class="panel"></div>
+      <div class="remote-side">
+        <div class="remote-stage">
+          <button id="remote-test" class="focusable" type="button">Test remote</button>
+          <div id="remote-drawing" aria-hidden="true"><span class="remote-logo">LG</span></div>
+        </div>
+        <p class="remote-hint" id="remote-hint"></p>
+      </div>
+    </div>
+    <footer>
+      <span id="remote-move-hint"><b>Arrows</b> Move</span>
+      <span id="remote-select-hint"><b>OK</b> Select</span>
+      <span id="remote-back-hint"><b>Back</b> Settings</span>
+      <span id="remote-status"></span>
+    </footer>
+  </main>
+
   <main id="settings-view" hidden>
     <header>
       <div class="time"><span class="clock"></span><span class="date"></span></div>
@@ -58,7 +82,7 @@
             <span class="copy"><strong>Panel brightness</strong><small>Light output</small></span>
             <span class="range"><i></i></span><span class="value">—</span>
           </button>
-          <button class="setting focusable" data-setting="brightness" data-nav-right="wifiEnabled" type="button">
+          <button class="setting focusable" data-setting="brightness" data-nav-right="remoteButtons" type="button">
             <span class="copy"><strong>Black level</strong><small>Shadow detail</small></span>
             <span class="range"><i></i></span><span class="value">—</span>
           </button>
@@ -88,11 +112,15 @@
             <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
             <span class="value">Loading…</span>
           </button>
+          <button class="setting choice-setting focusable" id="remoteButtons" data-nav-left="brightness" type="button">
+            <span class="copy"><strong>Remote buttons</strong><small>Disable or reassign remote buttons</small></span>
+            <span class="value" id="remote-summary">—</span>
+          </button>
         </div>
 
         <h2 class="section-gap">Network</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="wifiEnabled" data-nav-left="brightness" type="button">
+          <button class="setting choice-setting focusable" data-setting="wifiEnabled" data-nav-left="contrast" type="button">
             <span class="copy"><strong>Wi-Fi</strong><small id="wifi-detail">Reading network status…</small></span>
             <span class="value">Loading…</span>
           </button>
@@ -119,5 +147,6 @@
   </main>
   <script src="app.js"></script>
   <script src="settings.js"></script>
+  <script src="remote.js"></script>
 </body>
 </html>

@@ -403,30 +403,32 @@
     if (name === view) { return; }
     var previous = view;
     view = name;
-    ["home", "hidden", "settings"].forEach(function (id) {
+    ["home", "hidden", "settings", "remote"].forEach(function (id) {
       document.getElementById(id + "-view").hidden = id !== name;
     });
-    if (previous === "settings") { MinimalSettings.close(); }
+    if (previous === "settings" && name !== "remote") { MinimalSettings.close(); }
+    if (previous === "remote") { RemoteButtons.close(); }
     if (name === "settings") { MinimalSettings.open(); }
+    else if (name === "remote") { RemoteButtons.open(installed); }
     else if (name === "hidden") {
       renderHidden();
       setFocus(document.querySelector("#hidden-apps .focusable"));
     } else {
-      var back = previous === "settings" ? document.getElementById("settings") : document.getElementById("hidden-tile");
+      var back = previous === "hidden" ? document.getElementById("hidden-tile") : document.getElementById("settings");
       setFocus(back || document.querySelector("#apps .focusable"));
     }
   }
 
   function preloadSettings() {
     if (!document.hidden) {
-      window.setTimeout(MinimalSettings.preload, SETTINGS_PRELOAD_DELAY_MS);
+      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); }, SETTINGS_PRELOAD_DELAY_MS);
       return;
     }
     // webOS reloads Home in the background; read the settings only once Home is actually shown.
     document.addEventListener("visibilitychange", function onVisible() {
       if (document.hidden) { return; }
       document.removeEventListener("visibilitychange", onVisible);
-      window.setTimeout(MinimalSettings.preload, SETTINGS_PRELOAD_DELAY_MS);
+      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); }, SETTINGS_PRELOAD_DELAY_MS);
     });
   }
 
@@ -434,6 +436,10 @@
     document.addEventListener("keydown", function (event) {
       if (view === "settings") {
         if (MinimalSettings.handleKey(event) === "leave") { showView("home"); }
+        return;
+      }
+      if (view === "remote") {
+        if (RemoteButtons.handleKey(event) === "leave") { showView("settings"); }
         return;
       }
       if (editing) { editKey(event); return; }
@@ -480,6 +486,10 @@
         MinimalSettings.handlePointer(event);
         return;
       }
+      if (view === "remote") {
+        RemoteButtons.handlePointer(event);
+        return;
+      }
       if (editing) { return; }
       if (Math.abs(event.clientX - pointerX) + Math.abs(event.clientY - pointerY) > 8) {
         pointerX = event.clientX;
@@ -504,10 +514,13 @@
   function init() {
     initNavigation();
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
+    document.getElementById("remoteButtons").addEventListener("click", function () { showView("remote"); });
     // The Home key activates Home again; it should always lead to the app grid.
     document.addEventListener("webOSRelaunch", function () { stopEditing(); showView("home"); });
     tickClock();
     window.setInterval(tickClock, 1000);
+    // Remote buttons interrupted by a reload or restart leaves the real bindings aside; put them back.
+    RemoteButtons.restore();
 
     rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
       .catch(function () {})

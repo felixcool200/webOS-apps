@@ -16,10 +16,14 @@ Each app's version is in its `app/appinfo.json` and `package.json`.
 ```text
 apps/departures/
 apps/minimal-home/
+vendor/lginputhook/     LG Input Hook (git submodule), source of the remote button hook binaries
+third_party/            notices and licences for those binaries
 shared/                 palette, page reset and Luna helpers used by every app
 scripts/build-app.js    merges shared/ into each app's style.css and app.js
 scripts/deploy.sh       package, install and launch an app on the TV
 ```
+
+Clone with `git clone --recurse-submodules`, or run `git submodule update --init` in an existing clone: Minimal Home's build takes two files from `vendor/lginputhook`.
 
 Each app has its own `package.json` and can be packaged with:
 
@@ -110,6 +114,23 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
 
 ssh -i ~/.ssh/tv_key root@TV_ADDRESS '/home/root/use-minimal-home.sh'
 ```
+
+## Remote button hook
+
+Minimal Home's Remote buttons page needs LG Input Hook's library loaded into the TV's input programs (`lginput2`, `micomservice`). Minimal Home ships the two prebuilt binaries from [LG Input Hook](https://github.com/Simon34545/lginputhook) v1.5.1 and a boot script that loads them, so the LG Input Hook app (and its settings web server on port 1842) is not needed. Install the boot script once:
+
+```sh
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
+  'cat > /home/root/use-remote-buttons.sh' \
+  < apps/minimal-home/scripts/use-remote-buttons.sh
+
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
+  'chmod 755 /home/root/use-remote-buttons.sh && /home/root/use-remote-buttons.sh'
+```
+
+It copies `remote-hook/load-remote-hook.sh` to `/var/lib/webosbrew/init.d/60-remote-buttons`, which loads the library at every boot unless it is already loaded. To stop it, remove that file and reboot; the remote then works as from the factory.
+
+The binaries are `ezinject` (Zlib) and `libinputhookpp.so` (GPL-3.0, with Frida Gum under the wxWindows Library Licence). Their notices and licences are in `third_party/remote-hook/` and are packaged with Minimal Home. A Minimal Home IPK therefore contains GPL-3.0 code: publish it only together with those notices.
 
 ## Safety and recovery
 

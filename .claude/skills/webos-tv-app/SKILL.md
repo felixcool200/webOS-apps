@@ -65,7 +65,7 @@ First decide whether it should be an app at all. A screen reached from Home, lik
    - For Luna and root calls use `WebOS.lunaCall`, `WebOS.rootExec` and `WebOS.rootLuna` from `shared/webos.js`. Use `rootLuna` for anything that needs root (launching apps, settings writes); it rejects when the call answers `returnValue: false`. Root calls can fail while webOS is busy (for example right after Home reloads), so retry important ones before showing an error, as Home does with its app list.
    - Listen for `webOSRelaunch` to refresh state when the app is reopened.
    - Fullscreen layout sized for 1920x1080. `shared/base.css` provides the page reset, background, font and the shared colours (`--accent`, `--bg`, `--text`, `--muted`, `--error`, `--ok`); the app's `style.css` adds only its own tokens and layout.
-5. Run `npm install` in the app directory, then add the app to the Apps list in the root `README.md`. Leave out the version: versions live only in `package.json` and `appinfo.json`.
+5. Run `npm install` in the app directory (Minimal Home also needs `git submodule update --init` once, for `vendor/lginputhook`), then add the app to the Apps list in the root `README.md`. Leave out the version: versions live only in `package.json` and `appinfo.json`.
 
 ## Deploy
 
