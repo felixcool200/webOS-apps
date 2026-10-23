@@ -4,3 +4,4 @@ dist/
 *-capture.png
 .DS_Store
 *.log
+.env
