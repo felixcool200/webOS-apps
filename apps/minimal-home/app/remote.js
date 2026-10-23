@@ -74,8 +74,10 @@ var RemoteButtons = (function () {
   var listening = null;
   // The button pressed last during a test and when, to stop on three quick presses (Logic.stopStreak).
   var streak = null;
-  // The drawn button the arrows or the pointer are on, while the drawing has the focus.
+  // The drawn button the arrows or the pointer are on, while the drawing has the focus, and the last
+  // one, where the drawing is entered again from above or below.
   var pointed = null;
+  var lastPointed = null;
   var captureTimer = null;
   // The code being renamed, while the name field is open.
   var renaming = null;
@@ -324,6 +326,7 @@ var RemoteButtons = (function () {
     if (pointed) { pointed.element.classList.remove("is-pointed"); }
     pointed = entry;
     if (!entry) { return; }
+    lastPointed = entry;
     entry.element.classList.add("is-pointed");
     var button = entry.button;
     var code = String(button.codes[0]);
@@ -366,15 +369,16 @@ var RemoteButtons = (function () {
     showSelection();
   }
 
-  // Outlines the selected row's drawn button, or shows it on the card with what can be done to it.
+  // Outlines the selected row's drawn button while the list has the focus (not during a test, when
+  // only presses light up), or shows it on the card with what can be done to it.
   function showSelection() {
     var code = lastCode === "add" ? null : lastCode;
-    var match = code ? drawnFor(code) : null;
+    var match = code && !listening && selected && !isSide(selected) ? drawnFor(code) : null;
     drawn.forEach(function (entry) { entry.element.classList.toggle("is-selected", entry === match); });
-    if (remote !== "custom") { return; }
-    showCard(code);
-    $("remote-rename").hidden = !code || !!listening;
-    $("remote-remove").hidden = !isCustom(code) || !!listening;
+    // Rename and Remove belong to the Custom remote, and need a button to act on.
+    $("remote-rename").hidden = remote !== "custom" || !code || !!listening;
+    $("remote-remove").hidden = remote !== "custom" || !isCustom(code) || !!listening;
+    if (remote === "custom") { showCard(code); }
   }
 
   function showCard(code) {
@@ -599,19 +603,21 @@ var RemoteButtons = (function () {
   function setFocus(element) {
     if (!element) { return; }
     if (editing && element !== editing) { stopEditing(); }
+    var fromList = !!selected && !isSide(selected);
     selected = UI.moveFocus(selected, element);
     if (element === $("remote-drawing")) {
-      // Enter at the selected row's button.
-      if (!pointed) { point(drawnFor(lastCode) || drawn[1]); }
-      return;
+      // From the list, enter at the selected row's button; from above or below, where it was left.
+      if (!pointed) { point(fromList || !lastPointed ? drawnFor(lastCode) || drawn[1] : lastPointed); }
+    } else {
+      if (pointed) {
+        point(null);
+        setStatus("");
+      }
+      if (!isSide(element)) {
+        lastCode = element.getAttribute("data-code") || "add";
+        UI.keepInView(element);
+      }
     }
-    if (pointed) {
-      point(null);
-      setStatus("");
-    }
-    if (isSide(element)) { return; }
-    lastCode = element.getAttribute("data-code") || "add";
-    UI.keepInView(element);
     showSelection();
   }
 
@@ -717,6 +723,8 @@ var RemoteButtons = (function () {
     listening = null;
     renaming = null;
     fresh = false;
+    point(null);
+    lastPointed = null;
     showMode();
     setStatus("");
     UI.moveFocus(selected, null);
