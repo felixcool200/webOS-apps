@@ -1,30 +1,7 @@
 :root {
   --page-x: 4vw;
-  --accent: #72d6ff;
   --surface: rgba(255, 255, 255, 0.095);
   --surface-focus: rgba(255, 255, 255, 0.20);
-  --text: #f7f9fc;
-  --muted: rgba(247, 249, 252, 0.66);
-}
-
-* { box-sizing: border-box; }
-
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-}
-
-body {
-  color: var(--text);
-  background:
-    radial-gradient(80vw 60vh at 5% 0%, rgba(30, 104, 145, 0.42), transparent 65%),
-    radial-gradient(60vw 70vh at 100% 100%, rgba(67, 55, 130, 0.30), transparent 70%),
-    #081017;
-  font-family: "LG Smart UI", "Segoe UI", Arial, sans-serif;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 main {

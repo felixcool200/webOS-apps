@@ -18,7 +18,9 @@ Each app's version is in its `app/appinfo.json` and `package.json`.
 apps/departures/
 apps/minimal-home/
 apps/minimal-settings/
-scripts/deploy.sh    package, install and launch an app on the TV
+shared/                 palette, page reset and Luna helpers used by every app
+scripts/build-app.js    merges shared/ into an app and inlines it into one index.html
+scripts/deploy.sh       package, install and launch an app on the TV
 ```
 
 Each app has its own `package.json` and can be packaged with:
@@ -29,7 +31,7 @@ npm install
 npm run package
 ```
 
-The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
+Packaging first builds the app into its `build/` directory: `shared/base.css` and `shared/webos.js` are merged with the app's own `style.css` and `app.js`, and both are inlined into `index.html`, so the TV reads one file at startup. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
 
 Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest. Do not publish a Departures IPK built with a Trafiklab key; see its README.
 

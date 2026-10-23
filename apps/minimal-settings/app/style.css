@@ -1,33 +1,9 @@
 :root {
-  --accent: #72d6ff;
-  --bg: #081017;
   --surface: rgba(255, 255, 255, 0.085);
   --surface-2: rgba(255, 255, 255, 0.135);
-  --text: #f7f9fc;
-  --muted: rgba(247, 249, 252, 0.60);
-}
-
-* { box-sizing: border-box; }
-
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
 }
 
 body { position: fixed; inset: 0; }
-
-body {
-  color: var(--text);
-  background:
-    radial-gradient(70vw 65vh at 4% 0%, rgba(30, 104, 145, 0.38), transparent 68%),
-    radial-gradient(55vw 65vh at 100% 100%, rgba(67, 55, 130, 0.28), transparent 72%),
-    var(--bg);
-  font-family: "LG Smart UI", "Segoe UI", Arial, sans-serif;
-  -webkit-user-select: none;
-  user-select: none;
-}
 
 main { width: 100%; height: 100%; padding: 4vh 4vw 3vh; }
 
@@ -151,5 +127,5 @@ footer {
 
 footer b { color: var(--text); font-weight: 600; }
 #status { margin-left: auto; }
-#status.error { color: #ff9393; }
-#status.ok { color: #8be7b0; }
+#status.error { color: var(--error); }
+#status.ok { color: var(--ok); }

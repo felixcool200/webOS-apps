@@ -18,7 +18,7 @@ TV_SSH_KEY=tv_key              # key name in ~/.ssh, or a full path
 
 If `.env` is missing or `TV_HOST` is empty, ask the user for the values. Never commit `.env`, and never write the IP or key name into tracked files; use `TV_ADDRESS` and `~/.ssh/tv_key` as placeholders in docs.
 
-App secrets such as API keys also go in `.env`. The app's `package` script writes them into a gitignored file under `app/` (see `apps/departures/scripts/write-config.js`), and the app must still work without that file. An IPK built with a secret contains it, so never publish it.
+App secrets such as API keys also go in `.env`. The app's `build` script adds them to the built app in `build/` (gitignored; see `apps/departures/scripts/write-config.js`), and the app must still work without them. An IPK built with a secret contains it, so never publish it.
 
 For ad-hoc commands:
 
@@ -39,27 +39,30 @@ The TV's shell is busybox `sh`: no bashisms such as `PIPESTATUS`, and limited `l
 
    ```text
    apps/<name>/
-     package.json        # name webos-<name>, script "package": "ares-package app -o dist",
-                         # devDependency "@webos-tools/cli": "3.2.6"
+     package.json        # name webos-<name>, devDependency "@webos-tools/cli": "3.2.6", scripts:
+                         #   "build": "node ../../scripts/build-app.js .",
+                         #   "package": "npm run build && ares-package build -o dist"
      README.md           # what it does, how to build
      app/
        appinfo.json
-       index.html
+       index.html        # must load exactly <link rel="stylesheet" href="style.css"> and <script src="app.js"></script>
        style.css
        app.js
        icon.png          # 80x80
        largeIcon.png     # 130x130
    ```
 
+   `scripts/build-app.js` copies `app/` to `build/`, puts `shared/base.css` in front of `style.css` and `shared/webos.js` in front of `app.js`, and inlines both into `index.html`. The TV then reads one file at startup. `build/` is what gets packaged.
+
 2. `appinfo.json`: copy the one from `minimal-settings` and change `id`, `title` and `version`. The id is `org.webosbrew.<name>` with no dashes. Keep `"requiredPermissions": ["all"]`, the 1920x1080/3840x2160 resolutions, `disableBackHistoryAPI`, `noSplashOnLaunch` and `"vendor": "Local"`. Drop `"visible": false` if the app should appear in the launcher.
 3. Keep `version` identical in `package.json` and `appinfo.json`. The IPK is named `<id>_<version>_all.ipk`.
 4. Follow the existing code style in `app.js`:
    - One IIFE with `"use strict"`, `var`, plain functions, started on `DOMContentLoaded`.
-   - `var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };` and one `keydown` handler that calls `preventDefault()`. Back closes the app with `window.webOSSystem.close()`.
-   - Every interactive element has the `focusable` class and a visible focus state. The app must be fully usable with arrows, OK and Back.
-   - For luna and root calls, copy `lunaCall`, `rootExec` and `rootLuna` from `apps/minimal-settings/app/app.js`. Use `rootLuna` for anything that needs root (launching apps, settings writes).
+   - `var KEY = WebOS.KEY;` and one `keydown` handler that calls `preventDefault()`. Back calls `WebOS.backToHome()`, which brings Minimal Home to the front. Don't use `webOSSystem.close()`: webOS then shows its last-input screen first, and Back took about 1.7 s to reach Home instead of 0.65 s. Don't use `platformBack()` either: it shows a "Do you want to exit the app?" prompt.
+   - Every interactive element has the `focusable` class and is highlighted only through the app's `.is-focused` class, never `:hover`: the browser keeps `:hover` on the last pointed-at element after an arrow press hides the Magic Remote pointer. Pointer movement (`mousemove`) moves the same focus, as in Home and Settings. The app must be fully usable with arrows, OK and Back.
+   - For Luna and root calls use `WebOS.lunaCall`, `WebOS.rootExec` and `WebOS.rootLuna` from `shared/webos.js`. Use `rootLuna` for anything that needs root (launching apps, settings writes); it rejects when the call answers `returnValue: false`. Root calls can fail while webOS is busy (for example right after Home reloads), so retry important ones before showing an error, as Home does with its app list.
    - Listen for `webOSRelaunch` to refresh state when the app is reopened.
-   - Fullscreen layout sized for 1920x1080, `overflow: hidden`, colour tokens on `:root` as in the existing `style.css`.
+   - Fullscreen layout sized for 1920x1080. `shared/base.css` provides the page reset, background, font and the shared colours (`--accent`, `--bg`, `--text`, `--muted`, `--error`, `--ok`); the app's `style.css` adds only its own tokens and layout.
 5. Run `npm install` in the app directory, then add the app to the Apps list in the root `README.md`. Leave out the version: versions live only in `package.json` and `appinfo.json`.
 
 ## Deploy
@@ -90,9 +93,10 @@ There is no automated test suite. Check each change on the TV:
 
    `*-capture.png` is gitignored. If the capture call fails on this firmware, ask the user to check the screen instead.
 4. **Logs:** `tv 'grep <app-id> /var/log/messages | tail -n 50'` shows launch and visibility events only. JavaScript errors and `console` output are not logged, so have the app show failures in its own status line and check them in a screenshot.
-5. **Remote navigation:** this needs the physical remote. Ask the user to check specific keys (for example "press Down twice, then OK; the Wi-Fi row should enter edit mode") rather than a vague "try it".
+5. **Startup time:** close the app, launch it, and compare the `NL_APP_LAUNCH_BEGIN` and first `NL_VSC` `"visible":true` timestamps for its id in `/var/log/messages`. Measure several cold starts before and after a change meant to speed things up. A cold start took 0.8–1.1 s in October 2026, almost all of it webOS starting the page.
+6. **Remote navigation:** `tv 'luna-send -n 1 luna://com.webos.service.networkinput/sendSpecialKey "{\"key\":\"BACK\"}"'` presses a key (also `HOME`), which is enough for timing tests. Arrow navigation and pointer behaviour still need the physical remote. Ask the user to check specific keys (for example "press Down twice, then OK; the Wi-Fi row should enter edit mode") rather than a vague "try it".
 
-Layout-only checks can also run locally with `python3 -m http.server -d apps/<name>/app 8000` in a 1920x1080 browser window. Luna calls fail there because `PalmServiceBridge` only exists on the TV. Stop the server when you are done.
+Layout-only checks can also run locally: `npm run build` in the app directory, then `python3 -m http.server -d apps/<name>/build 8000` in a 1920x1080 browser window. `app/` on its own lacks the shared code. Luna calls fail there because `PalmServiceBridge` only exists on the TV. Stop the server when you are done.
 
 ## When the TV doesn't respond as expected
 

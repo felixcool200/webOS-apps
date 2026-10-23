@@ -39,7 +39,7 @@
   var GONE_STATES = { DEPARTED: true, PASSED: true, MISSED: true, ASSUMEDDEPARTED: true };
   var STATE_LABELS = { CANCELLED: "Cancelled", INHIBITED: "No stop", REPLACED: "Replaced" };
 
-  var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
+  var KEY = WebOS.KEY;
   function emptySource(name) {
     return { name: name, departures: [], updated: 0, error: null };
   }
@@ -421,7 +421,7 @@
     document.addEventListener("keydown", function (event) {
       if (event.keyCode === KEY.BACK) {
         event.preventDefault();
-        if (window.webOSSystem && window.webOSSystem.close) { window.webOSSystem.close(); }
+        WebOS.backToHome();
       } else if (event.keyCode === KEY.ENTER) {
         event.preventDefault();
         load();

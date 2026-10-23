@@ -1,10 +1,11 @@
 {
   "name": "webos-departures",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "private": true,
   "description": "Live SL departures near home for rooted LG webOS TVs",
   "scripts": {
-    "package": "node scripts/write-config.js && ares-package app -o dist"
+    "build": "node ../../scripts/build-app.js . && node scripts/write-config.js",
+    "package": "npm run build && ares-package build -o dist"
   },
   "devDependencies": {
     "@webos-tools/cli": "3.2.6"

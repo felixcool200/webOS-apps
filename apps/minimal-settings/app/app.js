@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
+  var KEY = WebOS.KEY;
+  var rootLuna = WebOS.rootLuna;
   var selected = null;
   var editing = null;
   var horizontalReturn = null;
@@ -34,33 +35,6 @@
     quickStartMode: { category: "option", kind: "choice", order: ["off", "on"], labels: { on: "On", off: "Off" } },
     wifiEnabled: { category: "network", kind: "choice", labels: { enabled: "On", disabled: "Off" } }
   };
-
-  function lunaCall(uri, payload) {
-    return new Promise(function (resolve, reject) {
-      try {
-        var bridge = new window.PalmServiceBridge();
-        bridge.onservicecallback = function (raw) {
-          try { resolve(JSON.parse(raw)); }
-          catch (error) { reject(error); }
-        };
-        bridge.call(uri, JSON.stringify(payload || {}));
-      } catch (error) { reject(error); }
-    });
-  }
-
-  function rootExec(command) {
-    return lunaCall("luna://org.webosbrew.hbchannel.service/exec", { command: command });
-  }
-
-  function rootLuna(uri, payload) {
-    var encoded = JSON.stringify(payload || {}).replace(/'/g, "'\\''");
-    return rootExec("luna-send -n 1 -f '" + uri + "' '" + encoded + "'").then(function (outer) {
-      if (!outer || !outer.stdoutString) { throw new Error((outer && outer.errorText) || "No response"); }
-      var response = JSON.parse(outer.stdoutString);
-      if (response.returnValue === false) { throw new Error(response.errorText || response.error || "Request failed"); }
-      return response;
-    });
-  }
 
   function setStatus(message, type) {
     var box = document.getElementById("status");
@@ -390,7 +364,7 @@
       if (event.keyCode === KEY.BACK) {
         event.preventDefault();
         if (editing) { stopEditing(); }
-        else if (window.webOSSystem && window.webOSSystem.close) { window.webOSSystem.close(); }
+        else { WebOS.backToHome(); }
       } else if (editing && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) {
         event.preventDefault();
         adjustSelected(event.keyCode === KEY.RIGHT ? 1 : -1);

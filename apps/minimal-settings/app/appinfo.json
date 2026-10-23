@@ -1,6 +1,6 @@
 {
   "id": "org.webosbrew.minimalsettings",
-  "version": "0.3.4",
+  "version": "0.3.7",
   "vendor": "Local",
   "type": "web",
   "main": "index.html",

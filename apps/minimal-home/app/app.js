@@ -20,46 +20,23 @@
     "viaplay-lg",
     "spotify-beehive"
   ];
-  var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
+  var KEY = WebOS.KEY;
+  var lunaCall = WebOS.lunaCall;
+  var rootExec = WebOS.rootExec;
+  var rootLuna = WebOS.rootLuna;
+  // webOS reloads Home twice in quick succession when it comes into view, and the app list call
+  // sometimes gets no answer then. Retry after these delays before showing an error.
+  var APP_LIST_RETRY_MS = [500, 1000, 2000];
   var selected = null;
   var pointerX = 0;
   var pointerY = 0;
-
-  function lunaCall(uri, payload) {
-    return new Promise(function (resolve, reject) {
-      try {
-        var bridge = new window.PalmServiceBridge();
-        bridge.onservicecallback = function (raw) {
-          try { resolve(JSON.parse(raw)); }
-          catch (error) { reject(error); }
-        };
-        bridge.call(uri, JSON.stringify(payload || {}));
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  function rootExec(command) {
-    return lunaCall("luna://org.webosbrew.hbchannel.service/exec", { command: command });
-  }
-
-  function rootLuna(uri, payload) {
-    var encoded = JSON.stringify(payload || {}).replace(/'/g, "'\\''");
-    return rootExec("luna-send -n 1 -f '" + uri + "' '" + encoded + "'").then(function (outer) {
-      if (!outer || !outer.stdoutString) { throw new Error((outer && outer.errorText) || "No response"); }
-      return JSON.parse(outer.stdoutString);
-    });
-  }
 
   function notify(message) {
     lunaCall("luna://com.webos.notification/createToast", { message: message }).catch(function () {});
   }
 
   function launch(id) {
-    rootLuna("luna://com.webos.service.applicationManager/launch", { id: id }).then(function (result) {
-      if (!result || result.returnValue === false) { throw new Error("Launch failed"); }
-    }).catch(function () {
+    rootLuna("luna://com.webos.service.applicationManager/launch", { id: id }).catch(function () {
       notify("Could not open " + id);
     });
   }
@@ -176,8 +153,8 @@
         return;
       }
       if (event.keyCode === KEY.BACK) {
+        // Home is where Back leads; closing it only made webOS start it again.
         event.preventDefault();
-        if (window.webOSSystem && window.webOSSystem.close) { window.webOSSystem.close(); }
         return;
       }
       if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].indexOf(event.keyCode) !== -1) {
@@ -198,6 +175,17 @@
     });
   }
 
+  function loadApps(attempt) {
+    return rootLuna("luna://com.webos.applicationManager/listApps", {}).then(function (result) {
+      if (!result.apps) { throw new Error("App list unavailable"); }
+      showApps(result.apps);
+    }).catch(function (error) {
+      if (attempt >= APP_LIST_RETRY_MS.length) { throw error; }
+      return new Promise(function (resolve) { window.setTimeout(resolve, APP_LIST_RETRY_MS[attempt]); })
+        .then(function () { return loadApps(attempt + 1); });
+    });
+  }
+
   function init() {
     initNavigation();
     document.getElementById("profile").addEventListener("click", function () { launch("com.webos.app.overlaymembership"); });
@@ -205,11 +193,7 @@
 
     rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
       .catch(function () {})
-      .then(function () { return rootLuna("luna://com.webos.applicationManager/listApps", {}); })
-      .then(function (result) {
-        if (!result || !result.apps) { throw new Error("App list unavailable"); }
-        showApps(result.apps);
-      })
+      .then(function () { return loadApps(0); })
       .catch(function () {
         var status = document.getElementById("status");
         status.textContent = "Could not load installed apps";

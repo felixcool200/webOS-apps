@@ -1,39 +1,13 @@
 :root {
-  --accent: #72d6ff;
-  --bg: #081017;
   --surface: rgba(255, 255, 255, 0.07);
   --divider: rgba(255, 255, 255, 0.075);
-  --text: #f7f9fc;
-  --muted: rgba(247, 249, 252, 0.62);
   --notice: #ffd27a;
-  --error: #ff9393;
-  --ok: #8be7b0;
   --bus: #d23a30;
   --tram: #94612b;
   --metro: #d71d24;
 }
 
-* { box-sizing: border-box; }
-
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-}
-
 body { position: fixed; inset: 0; }
-
-body {
-  color: var(--text);
-  background:
-    radial-gradient(70vw 65vh at 4% 0%, rgba(30, 104, 145, 0.38), transparent 68%),
-    radial-gradient(55vw 65vh at 100% 100%, rgba(67, 55, 130, 0.28), transparent 72%),
-    var(--bg);
-  font-family: "LG Smart UI", "Segoe UI", Arial, sans-serif;
-  -webkit-user-select: none;
-  user-select: none;
-}
 
 main { width: 100%; height: 100%; padding: 4vh 4vw 3vh; }
 

@@ -58,7 +58,7 @@ Add the key from a Trafiklab project with **Trafiklab Realtime APIs** to the rep
 TRAFIKLAB_KEY=...
 ```
 
-`npm run package` runs `scripts/write-config.js`, which writes the key to `app/config.js`. That file is gitignored. Without a key the app uses SL only.
+`npm run build` (and so `npm run package`) runs `scripts/write-config.js`, which adds the key to the built `build/index.html`. `build/` is gitignored. Without a key the app uses SL only.
 
 An IPK built with a key contains it, so do not publish that IPK.
 

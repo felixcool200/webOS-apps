@@ -1,10 +1,11 @@
 {
   "name": "webos-minimal-settings",
-  "version": "0.3.4",
+  "version": "0.3.7",
   "private": true,
   "description": "Fast fullscreen settings for rooted LG webOS TVs",
   "scripts": {
-    "package": "ares-package app -o dist"
+    "build": "node ../../scripts/build-app.js .",
+    "package": "npm run build && ares-package build -o dist"
   },
   "devDependencies": {
     "@webos-tools/cli": "3.2.6"
