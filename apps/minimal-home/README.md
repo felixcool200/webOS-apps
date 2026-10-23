@@ -1,6 +1,6 @@
 # Minimal Home for webOS
 
-A small, local launcher for a rooted LG webOS TV. It shows installed, visible apps and only two system actions: Profile and Settings.
+A small, local launcher for a rooted LG webOS TV. It shows installed, visible apps and one system action: Settings. (LG's Profile panel was dropped: it loads LG's online account page and took about 6 s to appear.)
 
 The local hidden-app list excludes Alexa, Camera, Sports, Home Hub, LG Channels, LG Gallery+, and Media Player.
 

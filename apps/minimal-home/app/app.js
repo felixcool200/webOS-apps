@@ -226,7 +226,6 @@
 
   function init() {
     initNavigation();
-    document.getElementById("profile").addEventListener("click", function () { launch("com.webos.app.overlaymembership"); });
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
     // The Home key activates Home again; it should always lead to the app grid.
     document.addEventListener("webOSRelaunch", function () { showView("home"); });
