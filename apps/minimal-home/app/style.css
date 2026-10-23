@@ -146,6 +146,15 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
   transform: scale(1.1) translateY(-0.8vh);
 }
 
+/* The Sources view: the TV's inputs as tiles. LG's input icons are dark line drawings, shown white. */
+.source .source-icon { width: 6.4vh; height: 6.4vh; border-radius: 0; filter: brightness(0) invert(0.92); }
+.source-state { color: var(--muted); font-size: 1.3vh; }
+.source.is-last .source-state { color: var(--accent); }
+.source.is-empty { opacity: 0.5; }
+.grid-view .source.is-empty.is-focused { opacity: 0.85; }
+.view-hint.error { color: var(--error); }
+#sources { flex: 1; min-height: 0; align-content: start; }
+
 #status {
   display: none;
   margin-top: 8vh;

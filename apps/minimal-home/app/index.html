@@ -15,6 +15,9 @@
       <div class="time"><span class="clock"></span><span class="date"></span></div>
       <p id="edit-hint" hidden>Left/Right moves · Down moves between the rows · Up hides · OK puts it down</p>
       <nav aria-label="System">
+        <button class="top-action focusable" id="sources-button" type="button" aria-label="Sources">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.5h18v11.5H3zM8.5 20h7M12 7.5v5.5M9.2 10.5 12 13.3l2.8-2.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="top-action focusable" id="settings" type="button" aria-label="Settings">
           <!-- The cog's shape spans x 4.1-21.5, so the view box is shifted 0.8 to centre it in the circle. -->
           <svg viewBox="0.8 0 24 24" aria-hidden="true"><path d="m19.4 13 .1-1-.1-1 2.1-1.6-2-3.5-2.6 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1L6.1 5.9l-2 3.5L6.2 11a8 8 0 0 0-.1 1l.1 1-2.1 1.6 2 3.5 2.6-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.6 1 2-3.5L19.4 13ZM12.8 15.6a3.7 3.7 0 1 1 0-7.3 3.7 3.7 0 0 1 0 7.3Z"/></svg>
@@ -40,6 +43,15 @@
     </header>
     <p class="view-hint">OK shows an app again · Back returns Home</p>
     <div id="hidden-apps" class="grid" role="list"></div>
+  </main>
+
+  <main id="sources-view" class="grid-view" hidden>
+    <header>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Sources</p>
+    </header>
+    <p class="view-hint" id="sources-hint">OK switches to the input · Back returns Home</p>
+    <div id="sources" class="grid" role="list"></div>
   </main>
 
   <main id="remote-view" class="panel-view" hidden>
@@ -163,8 +175,10 @@
   <script src="home-logic.js"></script>
   <script src="settings-logic.js"></script>
   <script src="remote-logic.js"></script>
+  <script src="sources-logic.js"></script>
   <script src="settings.js"></script>
   <script src="remote.js"></script>
+  <script src="sources.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

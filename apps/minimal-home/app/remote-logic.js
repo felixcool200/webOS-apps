@@ -57,6 +57,8 @@ var RemoteLogic = (function () {
   // page, so then it is disabled too.
   var HOME = "773";
   var NAME_LENGTH = 40;
+  // Views of Minimal Home a button can open: Home is launched with {"view": …} (see app.js).
+  var HOME_VIEWS = [{ label: "Open Sources", view: "sources" }, { label: "Open Home settings", view: "settings" }];
   // Buttons another remote's buttons can act as, so that remote can work the TV's menus and this page.
   var ACTS_AS = ["Back", "OK", "Up", "Down", "Left", "Right", "Home"];
   // A test stops when one button is pressed this many times within STOP_MS, on any remote.
@@ -148,6 +150,10 @@ var RemoteLogic = (function () {
       { label: "Disabled", bind: { action: "ignore" } },
       { label: "Screen on/off", bind: { action: "exec", command: SCREEN_TOGGLE } }
     ];
+    HOME_VIEWS.forEach(function (entry) {
+      list.push({ label: entry.label, bind: { action: "exec", command: "luna-send -n 1 luna://com.webos.service.applicationManager/launch " +
+        "'{\"id\":\"org.webosbrew.minimalhome\",\"params\":{\"view\":\"" + entry.view + "\"}}' </dev/null >/dev/null" } });
+    });
     ACTS_AS.forEach(function (name) {
       var button = MR24.filter(function (entry) { return entry.name === name; })[0];
       list.push({ label: "Acts as " + name, bind: { action: "replace", keycode: button.codes[0] } });

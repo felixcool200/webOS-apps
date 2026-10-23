@@ -43,10 +43,10 @@ test("a binding made elsewhere stays on offer as Custom after stepping away from
   const apps = [{ id: "netflix", title: "Netflix" }];
   const now = RemoteLogic.choices(apps, handMade, handMade);
   assert.deepStrictEqual(now.map((choice) => choice.label), ["Normal", "Custom", "Disabled", "Screen on/off",
-    "Acts as Back", "Acts as OK", "Acts as Up", "Acts as Down", "Acts as Left", "Acts as Right", "Acts as Home", "Open Netflix"]);
+    "Open Sources", "Open Home settings", "Acts as Back", "Acts as OK", "Acts as Up", "Acts as Down", "Acts as Left", "Acts as Right", "Acts as Home", "Open Netflix"]);
   const later = RemoteLogic.choices(apps, { action: "ignore" }, handMade);
   assert.strictEqual(later[RemoteLogic.indexOf(later, handMade)].label, "Custom");
-  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 11, "standard bindings add no Custom");
+  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 13, "standard bindings add no Custom");
 });
 
 test("only non-standard bindings are remembered as Custom", () => {
@@ -129,4 +129,10 @@ test("pressing one button three times within two seconds stops a test", () => {
   assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1044", 1200).stop, true);
   assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1037", 1200).stop, false, "another button starts over");
   assert.strictEqual(RemoteLogic.stopStreak(result.streak, "1044", 2700).stop, false, "too slow");
+});
+
+test("a button can open Minimal Home's Sources view", () => {
+  const open = RemoteLogic.choices([], null, null).find((choice) => choice.label === "Open Sources").bind;
+  assert.strictEqual(open.action, "exec");
+  assert.match(open.command, /applicationManager\/launch '\{"id":"org\.webosbrew\.minimalhome","params":\{"view":"sources"\}\}'/);
 });

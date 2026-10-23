@@ -47,14 +47,16 @@
   var TOOLS_KEY = "home.toolApps";
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  // The views of this page (<main id="NAME-view">), where Back leads from each, and the module that
-  // runs it. A module has open(), close(), handleKey(event) (returning "leave" for Back) and
-  // handlePointer(event), and gets the host below once at start.
+  // The views of this page (<main id="NAME-view">), where Back leads from each, the element on Home
+  // that gets the focus on the way back, and the module that runs it. A module has open(), close(),
+  // handleKey(event) (returning "leave" for Back) and handlePointer(event), and gets the host below
+  // once at start.
   var VIEWS = {
     home: { back: null },
-    hidden: { back: "home" },
-    settings: { back: "home", module: MinimalSettings },
-    remote: { back: "settings", module: RemoteButtons }
+    hidden: { back: "home", from: "hidden-tile" },
+    sources: { back: "home", from: "sources-button", module: Sources },
+    settings: { back: "home", from: "settings", module: MinimalSettings },
+    remote: { back: "settings", from: "settings", module: RemoteButtons }
   };
   var view = "home";
   var installed = [];
@@ -394,16 +396,24 @@
       renderHidden();
       setFocus(document.querySelector("#hidden-apps .focusable"));
     } else {
-      var back = previous === "hidden" ? document.getElementById("hidden-tile") : document.getElementById("settings");
-      setFocus(back || document.querySelector("#apps .focusable"));
+      setFocus(document.getElementById(VIEWS[previous].from) || document.querySelector("#apps .focusable"));
     }
+  }
+
+  // The view Home was launched or relaunched for, such as {"view": "sources"} from a remote button.
+  function viewFromParams(params) {
+    if (typeof params === "string") {
+      try { params = JSON.parse(params); } catch (error) { params = null; }
+    }
+    var name = params && params.view;
+    return name && VIEWS[name] ? name : "home";
   }
 
   // Reads what the Settings and Remote buttons views show. Reading the button bindings also puts them
   // back if a remote test was cut short by a reload.
   function preloadViews() {
     function preload() {
-      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); }, SETTINGS_PRELOAD_DELAY_MS);
+      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); Sources.preload(); }, SETTINGS_PRELOAD_DELAY_MS);
     }
     if (!document.hidden) {
       preload();
@@ -492,12 +502,16 @@
   function init() {
     initNavigation();
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
+    document.getElementById("sources-button").addEventListener("click", function () { showView("sources"); });
     var host = { navigate: showView, apps: function () { return installed; }, setLinkValue: MinimalSettings.setLinkValue };
     Object.keys(VIEWS).forEach(function (name) {
       if (VIEWS[name].module) { VIEWS[name].module.attach(host); }
     });
-    // The Home key activates Home again; it should always lead to the app grid.
-    document.addEventListener("webOSRelaunch", function () { stopEditing(); showView("home"); });
+    // The Home key activates Home again and leads to the app grid; a remote button bound to a view
+    // (Open Sources) relaunches it with that view.
+    document.addEventListener("webOSRelaunch", function (event) { stopEditing(); showView(viewFromParams(event.detail)); });
+    var system = window.webOSSystem || window.PalmSystem;
+    showView(viewFromParams(system && system.launchParams));
     tickClock();
     window.setInterval(tickClock, 1000);
 
