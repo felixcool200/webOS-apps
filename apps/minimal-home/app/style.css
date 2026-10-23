@@ -73,6 +73,8 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 }
 
 .grid::-webkit-scrollbar { display: none; }
+#hidden-apps { flex: 1; min-height: 0; align-content: start; }
+
 /* The Hidden row while arranging: a box of dimmed apps that are hidden from Home. */
 #hidden-section {
   margin-top: 2vh;

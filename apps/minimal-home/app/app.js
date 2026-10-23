@@ -53,6 +53,7 @@
   // once at start.
   var VIEWS = {
     home: { back: null },
+    hidden: { back: "home", from: "hidden-tile" },
     sources: { back: "home", from: "sources-button", module: Sources },
     settings: { back: "home", from: "settings", module: MinimalSettings },
     remote: { back: "settings", from: "settings", module: RemoteButtons }
@@ -173,7 +174,7 @@
     return tile;
   }
 
-  // Ends the Tools row while any apps are hidden, and starts arranging in the Hidden row.
+  // Ends the Tools row while any apps are hidden, and opens the Hidden apps view to launch them.
   function makeHiddenTile(count) {
     var button = document.createElement("button");
     button.type = "button";
@@ -187,10 +188,7 @@
     name.textContent = "Hidden apps";
     button.appendChild(picture);
     button.appendChild(name);
-    button.addEventListener("click", function () {
-      startArranging();
-      setFocus(document.querySelector("#hidden-row .focusable"));
-    });
+    button.addEventListener("click", function () { showView("hidden"); });
     return button;
   }
 
@@ -231,6 +229,16 @@
     if (view !== "home") { return; }
     var focus = (focusId || pickedId) && document.querySelector('#home-view [data-app-id="' + (focusId || pickedId) + '"]');
     setFocus(focus || document.querySelector("#apps .focusable") || document.querySelector("#home-view .focusable"));
+  }
+
+  // The Hidden apps view: the hidden apps by title, to launch them (showing one on Home again is done
+  // by arranging).
+  function renderHidden() {
+    var box = document.getElementById("hidden-apps");
+    box.textContent = "";
+    HomeLogic.hiddenApps(installed, readList(HIDDEN_KEY, DEFAULT_HIDDEN)).forEach(function (app) {
+      box.appendChild(makeTile(app, function () { launch(app.id); }));
+    });
   }
 
   // The rows as shown, as lists of app ids.
@@ -423,7 +431,10 @@
     });
     if (VIEWS[previous].module) { VIEWS[previous].module.close(); }
     if (VIEWS[name].module) { VIEWS[name].module.open(); }
-    else {
+    else if (name === "hidden") {
+      renderHidden();
+      setFocus(document.querySelector("#hidden-apps .focusable"));
+    } else {
       setFocus(document.getElementById(VIEWS[previous].from) || document.querySelector("#apps .focusable"));
     }
   }

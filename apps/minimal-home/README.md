@@ -32,7 +32,7 @@ The page's rules (which buttons are listed, what they can do, reading presses fr
 
 Hold OK (or the pointer button) on an app for about half a second to start arranging, like LG's own launcher: the app is picked up, and a Hidden box opens below the Tools row with the hidden apps. Left/Right move the picked-up app along its row; Up/Down move it between the apps, Tools and Hidden rows. Moving it into Hidden hides it, and moving it back up shows it again, so a mistake is one press to undo. OK puts it down and arranging goes on: move to another app, including one in the Hidden box, and press OK to pick it up. Back finishes, and the Hidden box closes. A short press of OK outside arranging still opens the app.
 
-While apps are hidden, a "Hidden apps" tile with their count ends the Tools row; OK on it starts arranging in the Hidden box. Alexa, Camera, Home Hub, LG Channels, LG Gallery+, Media Player, and Sports start out hidden.
+While apps are hidden, a "Hidden apps" tile with their count ends the Tools row. It opens a view of the hidden apps, where OK launches one, for apps used too rarely to keep on Home. Alexa, Camera, Home Hub, LG Channels, LG Gallery+, Media Player, and Sports start out hidden.
 
 The order, the Tools row, and the hidden list are kept in `localStorage` on the TV (WebAppMgr's storage under `/var/lib/wam`), so they survive reinstalling Home. Apps installed later appear after the saved order, and tools or hidden apps that are uninstalled keep their place in case they come back. The moves are in `app/home-logic.js`, tested by `test/home-logic.test.js`.
 
