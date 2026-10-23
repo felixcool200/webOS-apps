@@ -149,9 +149,11 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 /* The Sources view: the TV's inputs as tiles. LG's input icons are dark line drawings, shown white. */
 .source .source-icon { width: 6.4vh; height: 6.4vh; border-radius: 0; filter: brightness(0) invert(0.92); }
 .source-state { color: var(--muted); font-size: 1.3vh; }
-.source.is-last .source-state { color: var(--accent); }
-.source.is-empty { opacity: 0.5; }
-.grid-view .source.is-empty.is-focused { opacity: 0.85; }
+.source-badge { position: absolute; top: 1vh; right: 0.8vw; color: var(--accent); font-size: 1.15vh; font-weight: 600; }
+/* A port with nothing detected: dimmed contents on a darker tile, also while it has the focus. */
+.source.is-empty { background: rgba(255, 255, 255, 0.045); }
+.source.is-empty > * { opacity: 0.45; }
+.grid-view .source.is-empty.is-focused { background: rgba(255, 255, 255, 0.1); }
 .view-hint.error { color: var(--error); }
 #sources { flex: 1; min-height: 0; align-content: start; }
 

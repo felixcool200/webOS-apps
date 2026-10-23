@@ -7,16 +7,24 @@ var SourcesLogic = (function () {
   var LIVE_TV = { id: "LIVE_TV", appId: "com.webos.app.livetv", label: "Live TV", icon: ICONS + "tv.png", port: 0 };
   // External inputs by kind, in this order; anything else (AV, component, SCART) comes last.
   var KINDS = ["HDMI", "DP", "USBC"];
-  var STATES = { last: "Last used", active: "On", connected: "Connected", empty: "Nothing connected" };
+  var STATES = { live: "TV channels", active: "On", connected: "Connected", empty: "Nothing detected" };
 
   function kindRank(id) {
     var index = KINDS.indexOf(String(id).split("_")[0]);
     return index < 0 ? KINDS.length : index;
   }
 
+  // An input is active with a signal, and connected when a device is detected: for HDMI that is
+  // hdmiPlugIn, as in LG's own input picker, because eim's `connected` stays true for ports that have
+  // nothing plugged in.
+  function stateOf(device) {
+    if (device.activate || device.hdmiSignalExist) { return "active"; }
+    var detected = device.hdmiPlugIn === undefined ? device.connected : device.hdmiPlugIn;
+    return detected ? "connected" : "empty";
+  }
+
   // The inputs from eim/getAllInputStatus (`status`), after Live TV, by kind and port. `lastAppId` is
-  // the input app used last (eim/getLastInput), shown as such. An input is active with a live device,
-  // connected with a device that is off or idle, and empty otherwise.
+  // the input app used last (eim/getLastInput), which is marked as well as showing its state.
   function list(status, lastAppId) {
     var devices = (status && status.devices || []).filter(function (device) { return device && device.appId; })
       .slice().sort(function (left, right) {
@@ -27,12 +35,12 @@ var SourcesLogic = (function () {
           appId: device.appId,
           label: device.label || device.id,
           icon: (device.iconPrefix || ICONS) + (device.icon || "HDMI_sub.png"),
-          state: device.activate ? "active" : device.connected ? "connected" : "empty"
+          state: stateOf(device)
         };
       });
-    return [Object.assign({ state: "active" }, LIVE_TV)].concat(devices).map(function (source) {
+    return [Object.assign({ state: "live" }, LIVE_TV)].concat(devices).map(function (source) {
       source.last = source.appId === lastAppId;
-      source.stateText = source.last ? STATES.last : STATES[source.state];
+      source.stateText = STATES[source.state];
       return source;
     });
   }

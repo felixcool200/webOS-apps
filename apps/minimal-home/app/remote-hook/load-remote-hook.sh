@@ -11,7 +11,11 @@ mkdir -p "$(dirname "$CONFIG")"
 # Minimal Home's Remote buttons page sets the real bindings aside while it is open; if a restart
 # interrupted it, put them back, with the current time so a library that is already loaded notices.
 [ ! -f "$CONFIG.before-test" ] || { mv "$CONFIG.before-test" "$CONFIG" && touch "$CONFIG"; }
-[ -f "$CONFIG" ] || echo '{}' > "$CONFIG"
+# A new TV starts with Input opening Minimal Home's Sources and Settings opening its settings; these
+# must stay the same as RemoteLogic.defaultBinds() in remote-logic.js (checked by its tests).
+[ -f "$CONFIG" ] || cat > "$CONFIG" <<'EOF'
+{"139":{"action":"exec","command":"luna-send -n 1 luna://com.webos.service.applicationManager/launch '{\"id\":\"org.webosbrew.minimalhome\",\"params\":{\"view\":\"settings\"}}' </dev/null >/dev/null"},"241":{"action":"exec","command":"luna-send -n 1 luna://com.webos.service.applicationManager/launch '{\"id\":\"org.webosbrew.minimalhome\",\"params\":{\"view\":\"sources\"}}' </dev/null >/dev/null"}}
+EOF
 chmod 755 "$DIR/ezinject"
 
 # The remote's input program may not be running yet this early in the boot, so wait for it (up to a

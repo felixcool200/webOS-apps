@@ -166,6 +166,14 @@ var RemoteLogic = (function () {
     return list;
   }
 
+  // The bindings a new TV starts with (remote-hook/load-remote-hook.sh writes the same): Input opens
+  // Sources and Settings opens Home's settings.
+  function defaultBinds() {
+    var list = choices([], null, null);
+    function bindFor(label) { return list.filter(function (choice) { return choice.label === label; })[0].bind; }
+    return { "139": bindFor("Open Home settings"), "241": bindFor("Open Sources") };
+  }
+
   // The bindings that choices() would show as Custom, to remember them when the file is read.
   function customBinds(binds, apps) {
     var standard = choices(apps, null, null);
@@ -234,7 +242,7 @@ var RemoteLogic = (function () {
     MR24: MR24, HOME: HOME, SCREEN_TOGGLE: SCREEN_TOGGLE, buttonFor: buttonFor, isKept: isKept, nameFor: nameFor,
     displayName: displayName, nearestButton: nearestButton, stopStreak: stopStreak, STOP_PRESSES: STOP_PRESSES,
     listedCodes: listedCodes, testCodes: testCodes, disabledBinds: disabledBinds, sameBind: sameBind, indexOf: indexOf,
-    choices: choices, customBinds: customBinds, readPresses: readPresses, parseCustom: parseCustom,
+    choices: choices, defaultBinds: defaultBinds, customBinds: customBinds, readPresses: readPresses, parseCustom: parseCustom,
     withButton: withButton, withoutButton: withoutButton, canAdd: canAdd
   };
 }());

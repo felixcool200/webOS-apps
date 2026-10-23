@@ -8,9 +8,9 @@ The large top row holds the apps used day to day. YouTube, Netflix, Disney+, Sve
 
 ## Sources
 
-The Sources button, left of the Settings cog, opens a view of Live TV and the TV's inputs (HDMI and any others the TV has), with the names given to them in LG's settings, LG's icons, and whether something is on, connected, or nothing is connected. The input used last is selected and marked. OK switches to an input by launching its input app, as LG's own input picker does; Back returns Home.
+The Sources button, left of the Settings cog, opens a view of Live TV and the TV's inputs (HDMI and any others the TV has), with the names given to them in LG's settings, LG's icons, and whether a device is on, connected, or nothing is detected (dimmed). For HDMI that comes from `hdmiPlugIn`, as in LG's own picker: eim's `connected` stays true for ports with nothing plugged in. The input used last is selected and tagged. OK switches to an input by launching its input app, as LG's own input picker does; Back returns Home.
 
-A remote button set to Open Sources on the Remote buttons page (for example Input) opens this view straight away from anywhere: it launches Home with `{"view": "sources"}`. Open Home settings does the same for the Settings view. The inputs are read with `luna://com.webos.service.eim/getAllInputStatus` and `getLastInput`, a second after Home comes on screen and again on every open. The rules are in `app/sources-logic.js`, tested by `test/sources-logic.test.js`.
+The remote's Input button opens this view, and its Settings button opens Home's Settings view: the boot script sets these bindings up on a new TV, and they can be changed on the Remote buttons page. A button set to Open Sources opens the view straight away from anywhere: it launches Home with `{"view": "sources"}`. Open Home settings does the same for the Settings view. The inputs are read with `luna://com.webos.service.eim/getAllInputStatus` and `getLastInput`, a second after Home comes on screen and again on every open. The rules are in `app/sources-logic.js`, tested by `test/sources-logic.test.js`.
 
 ## Remote buttons
 

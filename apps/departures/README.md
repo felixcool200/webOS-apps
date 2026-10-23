@@ -36,6 +36,8 @@ GET https://realtime-api.trafiklab.se/v1/departures/{areaId}?key={key}
 
 Area ids come from `https://realtime-api.trafiklab.se/v1/stops/name/{name}?key={key}`: Torsvikstorg 740045933, Lidingö Torsvik station 740024788, Ropsten T-bana 740020757. The default interval of 90 seconds keeps three stops at 86,400 requests in 30 days even if the TV shows the app nonstop, under the 100,000 a month of a Bronze key.
 
+Both APIs come from Trafiklab under CC-BY, which asks for a "data from Trafiklab.se" credit on screen; the header says "Live SL data from Trafiklab.se". Asking Trafiklab more often than every 60 seconds brings nothing new: its answers carry `cache-control: max-age=60`, and in October 2026 requests 15, 30 and 45 seconds after the first got the same answer back.
+
 **[SL Transport API](https://www.trafiklab.se/api/other-apis/sl/transport/)** is polled every 30 seconds. It needs no key and is the only source of the stop notices. Its departures are used when there is no Trafiklab key, when Trafiklab fails or has no departures for a stop, or when Trafiklab data has missed more than one refresh. The status line then says "SL data for …" and, when Trafiklab failed, why.
 
 ```text

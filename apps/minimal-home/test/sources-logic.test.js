@@ -15,17 +15,25 @@ test("Live TV comes first, then the inputs by kind and port", () => {
 });
 
 test("each input shows the user's name, LG's icon and its state", () => {
-  const status = { devices: [hdmi(1, { label: "Apple TV", connected: true, activate: true }), hdmi(2, { connected: true }), hdmi(3)] };
-  const [, appleTv, second, third] = SourcesLogic.list(status, null);
+  const status = { devices: [hdmi(1, { label: "Apple TV", connected: true, hdmiPlugIn: true, activate: true }), hdmi(2, { connected: true, hdmiPlugIn: true }), hdmi(3)] };
+  const [liveTv, appleTv, second, third] = SourcesLogic.list(status, null);
   assert.strictEqual(appleTv.label, "Apple TV");
   assert.strictEqual(appleTv.icon, "/usr/palm/plugins/inputapps/assets/small/HDMI_1.png");
-  assert.deepStrictEqual([appleTv.stateText, second.stateText, third.stateText], ["On", "Connected", "Nothing connected"]);
+  assert.deepStrictEqual([liveTv.stateText, appleTv.stateText, second.stateText, third.stateText], ["TV channels", "On", "Connected", "Nothing detected"]);
 });
 
-test("the input used last says so", () => {
-  const sources = SourcesLogic.list({ devices: [hdmi(1, { connected: true }), hdmi(2)] }, "com.webos.app.hdmi1");
+test("an HDMI port eim calls connected, with nothing plugged in, shows as empty", () => {
+  // As read on the TV with no HDMI device attached: connected stays true, hdmiPlugIn is false.
+  const [, port] = SourcesLogic.list({ devices: [hdmi(3, { connected: true, hdmiPlugIn: false })] }, null);
+  assert.strictEqual(port.stateText, "Nothing detected");
+  const [, dp] = SourcesLogic.list({ devices: [{ id: "DP_1", port: 1, label: "DP 1", appId: "com.webos.app.dp1", connected: true }] }, null);
+  assert.strictEqual(dp.stateText, "Connected", "inputs without hdmiPlugIn use connected");
+});
+
+test("the input used last is marked and still shows its state", () => {
+  const sources = SourcesLogic.list({ devices: [hdmi(1, { connected: true, hdmiPlugIn: false }), hdmi(2)] }, "com.webos.app.hdmi1");
   assert.strictEqual(sources[1].last, true);
-  assert.strictEqual(sources[1].stateText, "Last used");
+  assert.strictEqual(sources[1].stateText, "Nothing detected");
   assert.strictEqual(sources[0].last, false);
 });
 

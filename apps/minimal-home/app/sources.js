@@ -57,6 +57,12 @@ var Sources = (function () {
     tile.appendChild(icon);
     tile.appendChild(name);
     tile.appendChild(state);
+    if (source.last) {
+      var badge = document.createElement("span");
+      badge.className = "source-badge";
+      badge.textContent = "Last used";
+      tile.appendChild(badge);
+    }
     tile.addEventListener("click", function () {
       setFocus(tile);
       switchTo(source);

@@ -136,3 +136,13 @@ test("a button can open Minimal Home's Sources view", () => {
   assert.strictEqual(open.action, "exec");
   assert.match(open.command, /applicationManager\/launch '\{"id":"org\.webosbrew\.minimalhome","params":\{"view":"sources"\}\}'/);
 });
+
+test("a new TV starts with Input opening Sources and Settings opening Home's settings", () => {
+  const defaults = RemoteLogic.defaultBinds();
+  const list = RemoteLogic.choices([], null, null);
+  assert.strictEqual(list[RemoteLogic.indexOf(list, defaults["241"])].label, "Open Sources");
+  assert.strictEqual(list[RemoteLogic.indexOf(list, defaults["139"])].label, "Open Home settings");
+  const script = require("fs").readFileSync(require("path").join(__dirname, "../app/remote-hook/load-remote-hook.sh"), "utf8");
+  const written = /<<'EOF'\n([\s\S]*?)\nEOF/.exec(script)[1];
+  assert.deepStrictEqual(JSON.parse(written), defaults, "the boot script writes the same defaults");
+});
