@@ -6,7 +6,7 @@ Small, fast applications for a rooted LG webOS TV.
 
 - **Minimal Home 0.1.6** — a fullscreen launcher with a curated app grid, Profile, remote navigation, and a reversible stock-Home redirect.
 - **Minimal Settings 0.3.3** — a fullscreen frontend for frequently used picture, sound, network, and system settings.
-- **Departures 0.1.1** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
+- **Departures 0.2.0** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
 
 All apps are plain webOS web applications. Privileged operations use the root execution service supplied by [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
 

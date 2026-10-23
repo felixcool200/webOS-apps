@@ -5,3 +5,5 @@ dist/
 .DS_Store
 *.log
 .env
+# Generated at packaging from .env; contains API keys
+apps/*/app/config.js

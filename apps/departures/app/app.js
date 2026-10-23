@@ -1,28 +1,56 @@
 (function () {
   "use strict";
 
-  // SL Transport API (Trafiklab "SL Transport"): no API key, CORS open to any origin.
+  // Trafiklab Realtime API: every departure in the next 60 minutes, with a `canceled` flag. It needs
+  // a key, which packaging writes to config.js from .env. Area ids come from /v1/stops/name/{name}.
+  var TRAFIKLAB_API = "https://realtime-api.trafiklab.se/v1/departures/";
+  var TRAFIKLAB_KEY = (window.DEPARTURES_CONFIG && window.DEPARTURES_CONFIG.trafiklabKey) || "";
+  // SL Transport API: no key, but at most three departures per line and direction. It is the
+  // fallback when Trafiklab fails or has no key, and the only source of stop notices.
   // Site ids come from https://transport.integration.sl.se/v1/sites.
-  var API = "https://transport.integration.sl.se/v1/sites/";
+  var SL_API = "https://transport.integration.sl.se/v1/sites/";
+  // Stops with `split` show departures on a `topPlatforms` platform, or with a direction matching
+  // `topDirection`, in the top half and the rest below.
   var STOPS = [
-    { id: 2000, name: "Torsvikstorg", mode: "BUS", label: "Bus" },
-    { id: 9252, name: "Torsvik", mode: "TRAM", label: "Tram · Lidingöbanan" },
-    { id: 9220, name: "Ropsten", mode: "METRO", label: "Metro · Red line" }
+    { id: 2000, area: "740045933", name: "Torsvikstorg", mode: "BUS", label: "Bus", split: ["From Lidingö", "To Lidingö"],
+      // The Ropsten side of the road: every bus to Ropsten (SL stop point 20022, Trafiklab
+      // platform 2) and 238 to Högsätra (20024, platform 3). 238 to Näset leaves from the other side.
+      topPlatforms: { "sl:20022": true, "sl:20024": true, "trafiklab:2": true, "trafiklab:3": true } },
+    { id: 9252, area: "740024788", name: "Torsvik", mode: "TRAM", label: "Tram · Lidingöbanan", split: ["From Lidingö", "To Lidingö"],
+      // Tram platforms at Torsvik can serve both directions, so the tram splits by direction instead.
+      topDirection: /^Ropsten\b/ },
+    { id: 9220, area: "740020757", name: "Ropsten", mode: "METRO", label: "Metro · Red line" }
   ];
   var FORECAST_MINUTES = 120;
   var MAX_ROWS = 8;
   var REFRESH_MS = 30000;
-  var TICK_MS = 5000;
+  // Up/Down change how often Trafiklab is asked. Three stops every 90 s is 86,400 requests in 30 days
+  // of nonstop use, under the 100,000 a month of a Bronze key. Below 60 s gives nothing new because
+  // Trafiklab caches answers for 60 s.
+  var TRAFIKLAB_SECONDS = { initial: 90, min: 60, max: 600, step: 15 };
+  var TRAFIKLAB_SECONDS_KEY = "departures.trafiklabSeconds";
+  // SL now and then answers with an empty list for a stop that has traffic. An empty answer
+  // only replaces departures that are older than this.
+  var EMPTY_GRACE_MS = 2 * 60000;
+  var RENDER_MS = 5000;
+  // Short enough that the seconds never visibly skip; tick() only touches cells whose text changes.
+  var TICK_MS = 250;
   var REQUEST_TIMEOUT_MS = 10000;
   var GONE_STATES = { DEPARTED: true, PASSED: true, MISSED: true, ASSUMEDDEPARTED: true };
   var STATE_LABELS = { CANCELLED: "Cancelled", INHIBITED: "No stop", REPLACED: "Replaced" };
 
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461 };
+  function emptySource(name) {
+    return { name: name, departures: [], updated: 0, error: null };
+  }
   var stops = STOPS.map(function (stop) {
-    return { config: stop, departures: [], deviations: [], updated: 0, error: null };
+    return { config: stop, sl: emptySource("SL"), trafiklab: emptySource("Trafiklab"), deviations: [] };
   });
-  var loading = null;
+  var loading = {};
+  var trafiklabSeconds = savedTrafiklabSeconds();
   var refreshTimer = null;
+  var trafiklabTimer = null;
+  var renderTimer = null;
   var tickTimer = null;
 
   var stockholmFormat = null;
@@ -101,55 +129,112 @@
     });
   }
 
-  function upcoming(stop, now) {
-    return stop.departures.map(function (departure) {
-      return {
-        line: departure.line && departure.line.designation,
-        destination: departure.destination,
-        state: departure.state,
-        at: parseWallClock(departure.expected || departure.scheduled)
-      };
-    }).filter(function (entry) {
-      return !GONE_STATES[entry.state] && !isNaN(entry.at) && entry.at - now > -60000;
+  // Both APIs are converted to the same entry shape. `label` replaces the countdown.
+  function fromSl(departure) {
+    // A cancelled trip is sometimes flagged only on the journey, with the departure still EXPECTED.
+    var cancelled = departure.journey && departure.journey.state === "CANCELLED";
+    return {
+      line: departure.line && departure.line.designation,
+      destination: departure.destination,
+      direction: departure.direction || departure.destination || "",
+      platform: "sl:" + (departure.stop_point && departure.stop_point.id),
+      label: STATE_LABELS[cancelled ? "CANCELLED" : departure.state] || "",
+      gone: !!GONE_STATES[departure.state],
+      at: parseWallClock(departure.expected || departure.scheduled)
+    };
+  }
+
+  function fromTrafiklab(departure) {
+    var route = departure.route || {};
+    var platform = departure.realtime_platform || departure.scheduled_platform || {};
+    return {
+      line: route.designation,
+      destination: (route.destination && route.destination.name) || route.direction,
+      direction: route.direction || "",
+      platform: "trafiklab:" + platform.designation,
+      label: departure.canceled ? STATE_LABELS.CANCELLED : "",
+      gone: false,
+      at: parseWallClock(departure.realtime || departure.scheduled)
+    };
+  }
+
+  function isTop(config, entry) {
+    if (config.topPlatforms) { return !!config.topPlatforms[entry.platform]; }
+    return config.topDirection.test(entry.direction);
+  }
+
+  // Trafiklab when it has recent departures and its last request worked (or SL's failed too), SL
+  // otherwise. Recent allows one missed Trafiklab refresh.
+  function pick(stop) {
+    var trafiklab = stop.trafiklab;
+    var recent = trafiklab.departures.length && Date.now() - trafiklab.updated < trafiklabSeconds * 2000 + REFRESH_MS;
+    return recent && (!trafiklab.error || stop.sl.error) ? trafiklab : stop.sl;
+  }
+
+  function upcoming(source, now) {
+    return source.departures.filter(function (entry) {
+      return !entry.gone && !isNaN(entry.at) && entry.at - now > -60000;
     }).sort(function (left, right) { return left.at - right.at; });
+  }
+
+  // Seconds show only for the next ten minutes, as small text after the minutes.
+  function fillTime(cell, at, now) {
+    var seconds = Math.floor((at - now) / 1000);
+    var text, textClass = "", small = "", smallClass = "";
+    if (seconds <= 0) {
+      text = "Now";
+    } else if (seconds < 60) {
+      text = String(seconds);
+      textClass = "count";
+      small = "s";
+    } else if (seconds < 600) {
+      text = String(Math.floor(seconds / 60));
+      small = ":" + pad(seconds % 60);
+      smallClass = "seconds";
+    } else if (seconds < 3600) {
+      text = String(Math.floor(seconds / 60));
+      small = "min";
+    } else {
+      text = clockText(at);
+    }
+    if (cell.shown === text + small) { return; }
+    cell.shown = text + small;
+    cell.textContent = "";
+    cell.appendChild(element("span", textClass, text));
+    if (small) { cell.appendChild(element("small", smallClass, small)); }
+    cell.classList.toggle("is-now", seconds < 60);
   }
 
   function timeCell(entry, now) {
     var cell = element("span", "time");
-    var label = STATE_LABELS[entry.state];
-    var minutes = Math.floor((entry.at - now) / 60000);
-    if (label) {
-      cell.textContent = label;
-    } else if (minutes < 1) {
-      cell.textContent = "Now";
-      cell.classList.add("is-now");
-    } else if (minutes < 60) {
-      cell.textContent = String(minutes);
-      cell.appendChild(element("small", "", "min"));
+    if (entry.label) {
+      cell.textContent = entry.label;
     } else {
-      cell.textContent = clockText(entry.at);
+      cell.setAttribute("data-at", entry.at);
+      fillTime(cell, entry.at, now);
     }
     return cell;
   }
 
-  function renderStop(stop, now) {
-    var card = document.querySelector('[data-stop="' + stop.config.id + '"]');
-    var list = card.querySelector(".departures");
-    var notice = card.querySelector(".notice");
-    var entries = upcoming(stop, now).slice(0, MAX_ROWS);
+  function tick() {
+    var now = stockholmNow();
+    var cells = document.querySelectorAll(".time[data-at]");
+    document.getElementById("clock").textContent = clockText(now);
+    for (var i = 0; i < cells.length; i += 1) {
+      fillTime(cells[i], +cells[i].getAttribute("data-at"), now);
+    }
+  }
 
-    notice.textContent = stop.deviations.map(function (deviation) { return deviation.message; }).join("  ·  ");
-    notice.classList.toggle("is-hidden", !stop.deviations.length);
-
+  function renderList(list, entries, source, now) {
     list.textContent = "";
     if (!entries.length) {
-      var message = stop.error ? "Could not load departures" :
-        stop.updated ? "No departures in the next " + FORECAST_MINUTES / 60 + " hours" : "Loading…";
-      list.appendChild(element("li", "empty" + (stop.error ? " is-error" : ""), message));
+      var message = source.error ? "Could not load departures" :
+        source.updated ? "No departures in the next " + FORECAST_MINUTES / 60 + " hours" : "Loading…";
+      list.appendChild(element("li", "empty" + (source.error ? " is-error" : ""), message));
       return;
     }
-    entries.forEach(function (entry) {
-      var row = element("li", "departure" + (STATE_LABELS[entry.state] ? " is-cancelled" : ""));
+    entries.slice(0, MAX_ROWS).forEach(function (entry) {
+      var row = element("li", "departure" + (entry.label ? " is-cancelled" : ""));
       row.appendChild(element("span", "line", entry.line || "–"));
       row.appendChild(element("span", "destination", entry.destination || ""));
       row.appendChild(timeCell(entry, now));
@@ -161,59 +246,149 @@
     }
   }
 
+  function renderStop(stop, now) {
+    var card = document.querySelector('[data-stop="' + stop.config.id + '"]');
+    var lists = card.querySelectorAll(".departures");
+    var notice = card.querySelector(".notice");
+    var source = pick(stop);
+    var entries = upcoming(source, now);
+
+    notice.textContent = stop.deviations.map(function (deviation) { return deviation.message; }).join("  ·  ");
+    notice.classList.toggle("is-hidden", !stop.deviations.length);
+
+    if (stop.config.split) {
+      renderList(lists[0], entries.filter(function (entry) { return isTop(stop.config, entry); }), source, now);
+      renderList(lists[1], entries.filter(function (entry) { return !isTop(stop.config, entry); }), source, now);
+    } else {
+      renderList(lists[0], entries, source, now);
+    }
+  }
+
   function render() {
     var now = stockholmNow();
     document.getElementById("clock").textContent = clockText(now);
     stops.forEach(function (stop) { renderStop(stop, now); });
   }
 
+  // There is no console on the TV, so the status line names the data source when it is not the
+  // expected one, and why.
   function reportStatus() {
-    var failed = stops.filter(function (stop) { return stop.error; });
     var now = stockholmNow();
-    if (!failed.length) {
-      setStatus("Updated " + clockText(now), "ok");
+    var failed = stops.filter(function (stop) { return pick(stop).error; });
+    if (failed.length) {
+      var stale = pick(failed[0]);
+      var suffix = stale.updated ? " · showing data from " + clockText(now - (Date.now() - stale.updated)) : "";
+      setStatus("Could not update " + failed[0].config.name + " (" + stale.error.message + ")" + suffix, "error");
       return;
     }
-    var oldest = Math.min.apply(null, stops.map(function (stop) { return stop.updated; }));
-    var suffix = oldest ? " · showing data from " + clockText(now - (Date.now() - oldest)) : "";
-    setStatus("Could not reach SL (" + failed[0].error.message + ")" + suffix, "error");
+    var fallback = TRAFIKLAB_KEY ? stops.filter(function (stop) { return pick(stop) === stop.sl; }) : [];
+    var note = "";
+    if (fallback.length) {
+      var reason = fallback[0].trafiklab.error;
+      note = " · SL data for " + fallback.map(function (stop) { return stop.config.name; }).join(", ") +
+        (reason ? " (Trafiklab: " + reason.message + ")" : "");
+    }
+    setStatus("Updated " + clockText(now) + note, "ok");
   }
 
-  function loadStop(stop) {
-    var url = API + stop.config.id + "/departures?transport=" + stop.config.mode + "&forecast=" + FORECAST_MINUTES;
+  function accept(source, departures) {
+    source.error = null;
+    if (!departures.length && source.departures.length && Date.now() - source.updated < EMPTY_GRACE_MS) { return; }
+    source.departures = departures;
+    source.updated = Date.now();
+  }
+
+  function fail(stop, source, error) {
+    source.error = error;
+    console.error(source.name + " departures for " + stop.config.name + " failed: " + error.message);
+  }
+
+  function loadSl(stop) {
+    var url = SL_API + stop.config.id + "/departures?transport=" + stop.config.mode + "&forecast=" + FORECAST_MINUTES;
     return getJson(url).then(function (data) {
-      stop.departures = data.departures || [];
       stop.deviations = relevantDeviations(data.stop_deviations || [], stop.config.mode);
-      stop.updated = Date.now();
-      stop.error = null;
-    }).catch(function (error) {
-      stop.error = error;
-      console.error("Departures for " + stop.config.name + " failed: " + error.message);
-    });
+      accept(stop.sl, (data.departures || []).map(fromSl));
+    }).catch(function (error) { fail(stop, stop.sl, error); });
   }
 
-  function load() {
-    if (loading) { return loading; }
+  function loadTrafiklab(stop) {
+    var url = TRAFIKLAB_API + stop.config.area + "?key=" + encodeURIComponent(TRAFIKLAB_KEY);
+    return getJson(url).then(function (data) {
+      accept(stop.trafiklab, (data.departures || []).filter(function (departure) {
+        return departure.route && departure.route.transport_mode === stop.config.mode;
+      }).map(fromTrafiklab));
+    }).catch(function (error) { fail(stop, stop.trafiklab, error); });
+  }
+
+  function loadAll(name, loader) {
+    if (loading[name]) { return loading[name]; }
     setStatus("Updating…");
-    loading = Promise.all(stops.map(loadStop)).then(function () {
-      loading = null;
+    loading[name] = Promise.all(stops.map(loader)).then(function () {
+      loading[name] = null;
       render();
       reportStatus();
     });
-    return loading;
+    return loading[name];
+  }
+
+  function loadFromSl() { return loadAll("sl", loadSl); }
+  function loadFromTrafiklab() { return TRAFIKLAB_KEY ? loadAll("trafiklab", loadTrafiklab) : Promise.resolve(); }
+
+  // Startup and OK ask both APIs at once, whenever Trafiklab was last asked.
+  function load() {
+    return Promise.all([loadFromSl(), loadFromTrafiklab()]);
+  }
+
+  function savedTrafiklabSeconds() {
+    try {
+      var saved = parseInt(window.localStorage.getItem(TRAFIKLAB_SECONDS_KEY), 10);
+      if (saved >= TRAFIKLAB_SECONDS.min && saved <= TRAFIKLAB_SECONDS.max) { return saved; }
+    } catch (error) {
+      console.warn("Could not read the saved Trafiklab interval: " + error.message);
+    }
+    return TRAFIKLAB_SECONDS.initial;
+  }
+
+  function showTrafiklabSeconds() {
+    var hint = document.getElementById("interval-hint");
+    hint.classList.toggle("is-hidden", !TRAFIKLAB_KEY);
+    document.getElementById("interval").textContent = "Trafiklab every " + trafiklabSeconds + " s";
+  }
+
+  function changeTrafiklabSeconds(step) {
+    if (!TRAFIKLAB_KEY) { return; }
+    trafiklabSeconds = Math.min(TRAFIKLAB_SECONDS.max, Math.max(TRAFIKLAB_SECONDS.min, trafiklabSeconds + step));
+    try {
+      window.localStorage.setItem(TRAFIKLAB_SECONDS_KEY, String(trafiklabSeconds));
+    } catch (error) {
+      console.warn("Could not save the Trafiklab interval: " + error.message);
+    }
+    showTrafiklabSeconds();
+    if (trafiklabTimer) {
+      window.clearInterval(trafiklabTimer);
+      trafiklabTimer = window.setInterval(loadFromTrafiklab, trafiklabSeconds * 1000);
+    }
+    var monthly = String(Math.round(STOPS.length * 30 * 24 * 3600 / trafiklabSeconds)).replace(/\B(?=(\d{3})+$)/g, ",");
+    setStatus("Trafiklab every " + trafiklabSeconds + " s · " + monthly + " requests in 30 days nonstop");
   }
 
   function startPolling() {
     stopPolling();
     load();
-    refreshTimer = window.setInterval(load, REFRESH_MS);
-    tickTimer = window.setInterval(render, TICK_MS);
+    refreshTimer = window.setInterval(loadFromSl, REFRESH_MS);
+    if (TRAFIKLAB_KEY) { trafiklabTimer = window.setInterval(loadFromTrafiklab, trafiklabSeconds * 1000); }
+    renderTimer = window.setInterval(render, RENDER_MS);
+    tickTimer = window.setInterval(tick, TICK_MS);
   }
 
   function stopPolling() {
     window.clearInterval(refreshTimer);
+    window.clearInterval(trafiklabTimer);
+    window.clearInterval(renderTimer);
     window.clearInterval(tickTimer);
     refreshTimer = null;
+    trafiklabTimer = null;
+    renderTimer = null;
     tickTimer = null;
   }
 
@@ -227,7 +402,16 @@
       head.appendChild(element("h2", "", config.name));
       head.appendChild(element("p", "mode", config.label));
       card.appendChild(head);
-      card.appendChild(element("ol", "departures"));
+      if (config.split) {
+        config.split.forEach(function (label) {
+          var half = element("div", "half");
+          half.appendChild(element("h3", "direction", label));
+          half.appendChild(element("ol", "departures"));
+          card.appendChild(half);
+        });
+      } else {
+        card.appendChild(element("ol", "departures"));
+      }
       card.appendChild(element("p", "notice is-hidden"));
       box.appendChild(card);
     });
@@ -241,7 +425,10 @@
       } else if (event.keyCode === KEY.ENTER) {
         event.preventDefault();
         load();
-      } else if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].indexOf(event.keyCode) !== -1) {
+      } else if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
+        event.preventDefault();
+        changeTrafiklabSeconds(event.keyCode === KEY.UP ? TRAFIKLAB_SECONDS.step : -TRAFIKLAB_SECONDS.step);
+      } else if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
         event.preventDefault();
       }
     });
@@ -250,6 +437,7 @@
   function init() {
     buildColumns();
     initKeys();
+    showTrafiklabSeconds();
     render();
     document.addEventListener("webOSRelaunch", startPolling);
     document.addEventListener("visibilitychange", function () {

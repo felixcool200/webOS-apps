@@ -18,6 +18,8 @@ TV_SSH_KEY=tv_key              # key name in ~/.ssh, or a full path
 
 If `.env` is missing or `TV_HOST` is empty, ask the user for the values. Never commit `.env`, and never write the IP or key name into tracked files; use `TV_ADDRESS` and `~/.ssh/tv_key` as placeholders in docs.
 
+App secrets such as API keys also go in `.env`. The app's `package` script writes them into a gitignored file under `app/` (see `apps/departures/scripts/write-config.js`), and the app must still work without that file. An IPK built with a secret contains it, so never publish it.
+
 For ad-hoc commands:
 
 ```sh

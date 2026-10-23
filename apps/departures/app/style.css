@@ -115,6 +115,28 @@ header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.9vh; }
   vertical-align: 0.1vh;
 }
 
+.half {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.half + .half {
+  margin-top: 1.2vh;
+  border-top: 2px solid rgba(255, 255, 255, 0.16);
+}
+
+.direction {
+  margin: 0;
+  padding: 1.4vh 0 0.4vh;
+  color: var(--muted);
+  font-size: 1.9vh;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .departures {
   position: relative;
   flex: 1;
@@ -135,6 +157,7 @@ header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.9vh; }
 }
 
 .departure:last-child { border-bottom: 0; }
+.half .departure { height: 6.4vh; }
 
 .line {
   border-radius: 0.8vh;
@@ -169,6 +192,10 @@ header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.9vh; }
   font-weight: 500;
 }
 
+/* The TV font has proportional digits and ignores tabular-nums, so digits that change every
+   second sit in fixed-width boxes. Otherwise the big minute number shifts with each tick. */
+.time .count { display: inline-block; min-width: 1.15em; text-align: right; }
+.time small.seconds { display: inline-block; width: 1.6em; margin-left: 0; text-align: left; }
 .time.is-now { color: var(--accent); }
 
 .departure.is-cancelled .line { opacity: 0.5; }
@@ -182,6 +209,7 @@ header p { margin-top: 0.8vh; color: var(--muted); font-size: 1.9vh; }
 }
 
 .empty.is-error { color: var(--error); }
+.half .empty { padding-top: 1.4vh; }
 
 .notice {
   display: -webkit-box;
@@ -208,6 +236,7 @@ footer {
 }
 
 footer b { color: var(--text); font-weight: 600; }
+#interval-hint.is-hidden { display: none; }
 #status { margin-left: auto; }
 #status.error { color: var(--error); }
 #status.ok { color: var(--ok); }
