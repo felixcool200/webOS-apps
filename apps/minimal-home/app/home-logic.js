@@ -32,19 +32,18 @@ var HomeLogic = (function () {
     };
   }
 
-  // The installed apps that are hidden, by title.
+  // The installed apps that are hidden, in the order of the hidden list (arranging sets it).
   function hiddenApps(installed, hidden) {
     return installed.filter(function (app) { return hidden.indexOf(app.id) >= 0; })
-      .sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
+      .sort(function (left, right) { return hidden.indexOf(left.id) - hidden.indexOf(right.id); });
   }
 
   // The rows while arranging, top to bottom; Hidden only shows then.
   var ROWS = ["apps", "tools", "hidden"];
 
   // Moves app `id` one step in a layout ({ apps, tools, hidden }: the ids as shown). Left and right
-  // swap it with its neighbour (not in Hidden, which is sorted by title); up and down move it to the
-  // row above or below, at the same place or at the end. Returns a new layout, or the same one when the
-  // app can't move that way.
+  // swap it with its neighbour; up and down move it to the row above or below, at the same place or at
+  // the end. Returns a new layout, or the same one when the app can't move that way.
   function moveInLayout(layout, id, direction) {
     var row = ROWS.filter(function (name) { return layout[name].indexOf(id) >= 0; })[0];
     if (!row) { return layout; }
@@ -53,7 +52,7 @@ var HomeLogic = (function () {
     var index = list.indexOf(id);
     if (direction === "left" || direction === "right") {
       var target = index + (direction === "right" ? 1 : -1);
-      if (row === "hidden" || target < 0 || target >= list.length) { return layout; }
+      if (target < 0 || target >= list.length) { return layout; }
       list.splice(index, 1);
       list.splice(target, 0, id);
       return next;

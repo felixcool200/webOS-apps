@@ -28,9 +28,9 @@ test("hidden apps are left out and counted, tools go to their own row", () => {
   assert.strictEqual(rows.hiddenCount, 1);
 });
 
-test("the Hidden apps view lists hidden apps by title", () => {
+test("hidden apps keep the order they were arranged in", () => {
   const installed = [app("x", { title: "Zattoo" }), app("y", { title: "Alexa" }), app("z", { title: "Mail" })];
-  assert.deepStrictEqual(ids(HomeLogic.hiddenApps(installed, ["x", "y"])), ["y", "x"]);
+  assert.deepStrictEqual(ids(HomeLogic.hiddenApps(installed, ["x", "gone", "y"])), ["x", "y"]);
 });
 
 test("a missing or broken saved list falls back to a copy of the default", () => {
@@ -80,7 +80,7 @@ test("arranging moves an app down into Tools and then into Hidden, and back up",
   assert.deepStrictEqual(next.tools, ["hb", "camera"]);
   assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "yt", "up"), layout(), "nothing above the apps");
   assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "alexa", "down"), layout(), "nothing below Hidden");
-  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "alexa", "right"), layout(), "Hidden is sorted by title");
+  assert.deepStrictEqual(HomeLogic.moveInLayout(layout(), "alexa", "right").hidden, ["camera", "alexa"], "Hidden can be sorted too");
 });
 
 test("saving a layout keeps tools and hidden apps that aren't installed now", () => {
