@@ -10,11 +10,17 @@ The large top row holds the apps used day to day. YouTube, Netflix, Disney+, Sve
 
 Settings has a Remote buttons page that decides what each button on the remote (an LG MR24 Magic Remote) does: Normal, Disabled, Screen on/off (LG's own Screen Off mode, picture dark and sound on), or Open an app. It lists every button except Power, which never reaches the TV's software, and OK, the arrows, Back, and Home, which stay as they are so the remote remains usable.
 
-As in the Settings view, OK on a row lets Left/Right change its action, and OK or Back finishes. Next to the list is a drawing of the remote that outlines the button of the selected row. Changes take effect right away.
+As in the Settings view, OK on a row lets Left/Right change its action, and OK or Back finishes. Each row shows the button's code under its name. Next to the list is a drawing of the remote that outlines the button of the selected row; pointing at a drawn button and pressing OK selects its row. Changes take effect right away. A binding made some other way shows as Custom and stays on offer after choosing something else, so it can be chosen again.
 
-Test remote, above the drawing (Right from the list), finds a button by pressing it: buttons light up on the drawing as the TV receives them, and pressing a listed button selects its row. During the test every listed button and Home are temporarily disabled and the page ignores the other buttons, so every press only lights a button up. Press Back twice to stop the test (or choose Stop test with the pointer, or leave the page). If Home is reloaded or the TV restarts during a test, the bindings are put back at Home's next start or at boot.
+Test remote, above the drawing (Right from the list), finds a button by pressing it: buttons light up as the TV receives them, and pressing a listed button selects its row. During the test every bindable button and Home are temporarily disabled and the page ignores the other buttons, so every press only lights a button up. Press Back twice to stop the test (or choose Stop test with the pointer, or leave the page). The test also stops when Home goes out of sight. If Home is reloaded or the TV restarts during a test, the bindings are put back when Home next reads them or at boot.
 
-The bindings are stored in `/home/root/.config/lginputhook/keybinds.json` and applied by LG Input Hook's library, which Minimal Home ships in `remote-hook/` (see "Remote button hook" in the repository README). The library reloads the file by itself whenever it changes.
+### Custom remote
+
+Remote, below the drawing, switches between LG MR24 and Custom (OK, then Left/Right). Custom lists your own buttons, for another remote or buttons the MR24 list lacks: Add a button, at the end of the list, waits 15 seconds for a button press and adds that button (Back cancels). Name it with the on-screen keyboard and OK. A card replaces the drawing and shows the selected button's name and code, with Rename and Remove below it; Remove also undoes what the button was set to do. Codes bound on the other remote are listed too, so every binding can be seen. The Custom buttons and the chosen remote are kept in `localStorage`.
+
+The bindings are stored in `/home/root/.config/lginputhook/keybinds.json` and applied by LG Input Hook's library, which Minimal Home ships in `remote-hook/` (see "Remote button hook" in the repository README). At each button press the library rereads the file if its modification time has moved to a later second, so the page makes sure every write does.
+
+The page's rules (which buttons are listed, what they can do, reading presses from the hook's log) are in `app/remote-logic.js`, tested by `test/remote-logic.test.js`.
 
 ## Edit mode
 
@@ -26,7 +32,7 @@ The order, the Tools row, and the hidden list are kept in `localStorage` on the 
 
 ## Settings view
 
-The Settings action opens a Settings view inside Minimal Home, so no separate app has to start: it appears in about 0.2 s instead of about 1 s. Its code is `app/settings.js` and `app/settings.css`. Home reads the current values in the background about a second after it comes on screen, so they are already filled in when the view opens, and refreshes them on every open.
+The Settings action opens a Settings view inside Minimal Home, so no separate app has to start: it appears in about 0.2 s instead of about 1 s. Its code is `app/settings.js`, `app/settings-logic.js` (tested by `test/home-logic.test.js`) and `app/settings.css`. Home reads the current values in the background about a second after it comes on screen, so they are already filled in when the view opens, and refreshes them on every open.
 
 The view exposes a deliberately small set of verified controls: picture mode, panel brightness, black level, contrast, colour temperature, energy saving, sound mode, Quick Start+, live Wi-Fi and Ethernet status, and a Wi-Fi on/off control. Detailed network setup and less common options remain available through the Open LG Settings button.
 

@@ -1,7 +1,10 @@
+// Minimal Home: the app grid, Hidden apps, and the page's views. It runs Home and Hidden apps itself
+// and hands the Settings and Remote buttons views to settings.js and remote.js (see VIEWS). It is the
+// last script, so the other modules are there when it starts.
 (function () {
   "use strict";
 
-  var APP_ID = "org.webosbrew.minimalhome";
+  var APP_ID = WebOS.HOME_ID;
   var APP_DIR = "/media/developer/apps/usr/palm/applications/" + APP_ID;
   // Starting contents of the hidden list and the Tools row. Edit mode changes them, and the result is
   // saved on the TV, so these only apply until the first change.
@@ -30,7 +33,6 @@
   ];
   var KEY = WebOS.KEY;
   var lunaCall = WebOS.lunaCall;
-  var rootExec = WebOS.rootExec;
   var rootLuna = WebOS.rootLuna;
   // webOS reloads Home twice in quick succession when it comes into view, and the app list call
   // sometimes gets no answer then. Retry after these delays before showing an error.
@@ -45,6 +47,15 @@
   var TOOLS_KEY = "home.toolApps";
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  // The views of this page (<main id="NAME-view">), where Back leads from each, and the module that
+  // runs it. A module has open(), close(), handleKey(event) (returning "leave" for Back) and
+  // handlePointer(event), and gets the host below once at start.
+  var VIEWS = {
+    home: { back: null },
+    hidden: { back: "home" },
+    settings: { back: "home", module: MinimalSettings },
+    remote: { back: "settings", module: RemoteButtons }
+  };
   var view = "home";
   var installed = [];
   var editing = null;
@@ -69,8 +80,7 @@
   // Returns the saved list, or the fallback if nothing has been saved yet.
   function readList(key, fallback) {
     try {
-      var list = JSON.parse(window.localStorage.getItem(key));
-      return Array.isArray(list) ? list : fallback.slice();
+      return HomeLogic.parseList(window.localStorage.getItem(key), fallback);
     } catch (error) {
       console.warn("Could not read " + key + ": " + error.message);
       return fallback.slice();
@@ -172,44 +182,22 @@
   }
 
   function showApps(apps) {
-    var visible = apps.filter(function (app) {
-      return app && app.visible !== false && app.id !== APP_ID && app.id !== "com.webos.app.home";
-    });
-
-    var rank = {};
-    PREFERRED_APP_ORDER.forEach(function (id, index) { rank[id] = index; });
-    installed = visible.map(function (app, index) {
-      return { app: app, originalIndex: index };
-    }).sort(function (left, right) {
-      var leftRank = Object.prototype.hasOwnProperty.call(rank, left.app.id) ? rank[left.app.id] : PREFERRED_APP_ORDER.length;
-      var rightRank = Object.prototype.hasOwnProperty.call(rank, right.app.id) ? rank[right.app.id] : PREFERRED_APP_ORDER.length;
-      return leftRank === rightRank ? left.originalIndex - right.originalIndex : leftRank - rightRank;
-    }).map(function (entry) { return entry.app; });
+    installed = HomeLogic.sortInstalled(apps, PREFERRED_APP_ORDER, [APP_ID, "com.webos.app.home"]);
     renderApps(null);
   }
 
-  // Draws both rows in the saved order without the hidden apps. Apps that are not in the saved order
-  // (installed later) follow it in the default order.
+  // Draws both rows in the saved order without the hidden apps.
   function renderApps(focusId) {
     var apps = document.getElementById("apps");
     var tools = document.getElementById("tools");
     var status = document.getElementById("status");
-    var hidden = readList(HIDDEN_KEY, DEFAULT_HIDDEN);
-    var toolIds = readList(TOOLS_KEY, DEFAULT_TOOLS);
-    var saved = readList(ORDER_KEY, []);
-    var shown = installed.filter(function (app) { return hidden.indexOf(app.id) < 0; });
-    shown = shown.map(function (app, index) {
-      var position = saved.indexOf(app.id);
-      return { app: app, rank: position < 0 ? saved.length + index : position };
-    }).sort(function (left, right) { return left.rank - right.rank; }).map(function (entry) { return entry.app; });
+    var rows = HomeLogic.arrange(installed, readList(HIDDEN_KEY, DEFAULT_HIDDEN), readList(TOOLS_KEY, DEFAULT_TOOLS), readList(ORDER_KEY, []));
 
     apps.textContent = "";
     tools.textContent = "";
-    shown.forEach(function (app) {
-      (toolIds.indexOf(app.id) < 0 ? apps : tools).appendChild(makeHomeTile(app));
-    });
-    var hiddenCount = installed.length - shown.length;
-    if (hiddenCount) { tools.appendChild(makeHiddenTile(hiddenCount)); }
+    rows.apps.forEach(function (app) { apps.appendChild(makeHomeTile(app)); });
+    rows.tools.forEach(function (app) { tools.appendChild(makeHomeTile(app)); });
+    if (rows.hiddenCount) { tools.appendChild(makeHiddenTile(rows.hiddenCount)); }
     document.getElementById("tools-section").hidden = !tools.children.length;
     status.classList.toggle("visible", installed.length === 0);
     status.textContent = installed.length ? "" : "No apps found";
@@ -220,9 +208,7 @@
 
   function renderHidden() {
     var box = document.getElementById("hidden-apps");
-    var hidden = readList(HIDDEN_KEY, DEFAULT_HIDDEN);
-    var apps = installed.filter(function (app) { return hidden.indexOf(app.id) >= 0; })
-      .sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
+    var apps = HomeLogic.hiddenApps(installed, readList(HIDDEN_KEY, DEFAULT_HIDDEN));
     box.textContent = "";
     apps.forEach(function (app) { box.appendChild(makeTile(app, unhide)); });
     return apps.length;
@@ -313,12 +299,8 @@
   }
 
   function setFocus(element) {
-    if (selected) { selected.classList.remove("is-focused"); }
-    selected = element;
-    if (selected) {
-      selected.classList.add("is-focused");
-      if (selected.scrollIntoView) { selected.scrollIntoView({ block: "nearest", inline: "nearest" }); }
-    }
+    selected = UI.moveFocus(selected, element);
+    if (selected && selected.scrollIntoView) { selected.scrollIntoView({ block: "nearest", inline: "nearest" }); }
   }
 
   function focusables() {
@@ -398,18 +380,16 @@
     return best;
   }
 
-  // Home, Hidden apps and Settings are views of this page, so switching needs no app launch.
+  // The views are parts of this page, so switching needs no app launch.
   function showView(name) {
-    if (name === view) { return; }
+    if (name === view || !VIEWS[name]) { return; }
     var previous = view;
     view = name;
-    ["home", "hidden", "settings", "remote"].forEach(function (id) {
+    Object.keys(VIEWS).forEach(function (id) {
       document.getElementById(id + "-view").hidden = id !== name;
     });
-    if (previous === "settings" && name !== "remote") { MinimalSettings.close(); }
-    if (previous === "remote") { RemoteButtons.close(); }
-    if (name === "settings") { MinimalSettings.open(); }
-    else if (name === "remote") { RemoteButtons.open(installed); }
+    if (VIEWS[previous].module) { VIEWS[previous].module.close(); }
+    if (VIEWS[name].module) { VIEWS[name].module.open(); }
     else if (name === "hidden") {
       renderHidden();
       setFocus(document.querySelector("#hidden-apps .focusable"));
@@ -419,27 +399,29 @@
     }
   }
 
-  function preloadSettings() {
-    if (!document.hidden) {
+  // Reads what the Settings and Remote buttons views show. Reading the button bindings also puts them
+  // back if a remote test was cut short by a reload.
+  function preloadViews() {
+    function preload() {
       window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); }, SETTINGS_PRELOAD_DELAY_MS);
+    }
+    if (!document.hidden) {
+      preload();
       return;
     }
     // webOS reloads Home in the background; read the settings only once Home is actually shown.
     document.addEventListener("visibilitychange", function onVisible() {
       if (document.hidden) { return; }
       document.removeEventListener("visibilitychange", onVisible);
-      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); }, SETTINGS_PRELOAD_DELAY_MS);
+      preload();
     });
   }
 
   function initNavigation() {
     document.addEventListener("keydown", function (event) {
-      if (view === "settings") {
-        if (MinimalSettings.handleKey(event) === "leave") { showView("home"); }
-        return;
-      }
-      if (view === "remote") {
-        if (RemoteButtons.handleKey(event) === "leave") { showView("settings"); }
+      var module = VIEWS[view].module;
+      if (module) {
+        if (module.handleKey(event) === "leave") { showView(VIEWS[view].back); }
         return;
       }
       if (editing) { editKey(event); return; }
@@ -454,7 +436,7 @@
       if (event.keyCode === KEY.BACK) {
         // Home is where Back leads; closing it only made webOS start it again.
         event.preventDefault();
-        if (view === "hidden") { showView("home"); }
+        if (VIEWS[view].back) { showView(VIEWS[view].back); }
         return;
       }
       if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].indexOf(event.keyCode) !== -1) {
@@ -477,17 +459,15 @@
         window.clearTimeout(holdTimer);
         holdTimer = null;
       }
+      // The click that would clear it comes right after mouseup, and only on the same tile.
+      if (suppressClick) { window.setTimeout(function () { suppressClick = false; }, 0); }
     });
 
     // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
     // browser keeps :hover on the last pointed-at tile after an arrow press hides the pointer.
     document.addEventListener("mousemove", function (event) {
-      if (view === "settings") {
-        MinimalSettings.handlePointer(event);
-        return;
-      }
-      if (view === "remote") {
-        RemoteButtons.handlePointer(event);
+      if (VIEWS[view].module) {
+        VIEWS[view].module.handlePointer(event);
         return;
       }
       if (editing) { return; }
@@ -500,38 +480,38 @@
     });
   }
 
-  function loadApps(attempt) {
-    return rootLuna("luna://com.webos.applicationManager/listApps", {}).then(function (result) {
-      if (!result.apps) { throw new Error("App list unavailable"); }
-      showApps(result.apps);
-    }).catch(function (error) {
-      if (attempt >= APP_LIST_RETRY_MS.length) { throw error; }
-      return new Promise(function (resolve) { window.setTimeout(resolve, APP_LIST_RETRY_MS[attempt]); })
-        .then(function () { return loadApps(attempt + 1); });
-    });
+  function loadApps() {
+    return WebOS.retry(function () {
+      return rootLuna("luna://com.webos.applicationManager/listApps", {}).then(function (result) {
+        if (!result.apps) { throw new Error("App list unavailable"); }
+        showApps(result.apps);
+      });
+    }, APP_LIST_RETRY_MS);
   }
 
   function init() {
     initNavigation();
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
-    document.getElementById("remoteButtons").addEventListener("click", function () { showView("remote"); });
+    var host = { navigate: showView, apps: function () { return installed; }, setLinkValue: MinimalSettings.setLinkValue };
+    Object.keys(VIEWS).forEach(function (name) {
+      if (VIEWS[name].module) { VIEWS[name].module.attach(host); }
+    });
     // The Home key activates Home again; it should always lead to the app grid.
     document.addEventListener("webOSRelaunch", function () { stopEditing(); showView("home"); });
     tickClock();
     window.setInterval(tickClock, 1000);
-    // Remote buttons interrupted by a reload or restart leaves the real bindings aside; put them back.
-    RemoteButtons.restore();
 
-    rootExec("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
-      .catch(function () {})
-      .then(function () { return loadApps(0); })
-      .then(preloadSettings)
+    // App icons are read through a link to / inside the app's folder.
+    WebOS.rootShell("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
+      .catch(function (error) { console.warn("Could not link the app icons: " + error.message); })
+      .then(loadApps)
       .catch(function () {
         var status = document.getElementById("status");
         status.textContent = "Could not load installed apps";
         status.classList.add("visible");
         notify("Minimal Home could not read the app list");
-      });
+      })
+      .then(preloadViews);
   }
 
   document.addEventListener("DOMContentLoaded", init);

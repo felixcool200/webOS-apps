@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Minimal Home</title>
+  <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="remote.css">
@@ -41,7 +42,7 @@
     <div id="hidden-apps" class="grid" role="list"></div>
   </main>
 
-  <main id="remote-view" hidden>
+  <main id="remote-view" class="panel-view" hidden>
     <header>
       <div class="time"><span class="clock"></span><span class="date"></span></div>
       <p class="view-name">Remote buttons</p>
@@ -50,8 +51,17 @@
       <div id="remote-list" class="panel"></div>
       <div class="remote-side">
         <div class="remote-stage">
-          <button id="remote-test" class="focusable" type="button">Test remote</button>
+          <button id="remote-test" class="remote-action focusable" type="button">Test remote</button>
           <div id="remote-drawing" aria-hidden="true"><span class="remote-logo">LG</span></div>
+          <div id="remote-card" hidden>
+            <small>Selected button</small>
+            <strong id="remote-card-title"></strong>
+            <input id="remote-name" type="text" maxlength="40" autocomplete="off" spellcheck="false" hidden>
+            <span id="remote-card-code"></span>
+          </div>
+          <button id="remote-rename" class="remote-action focusable" type="button" hidden>Rename</button>
+          <button id="remote-remove" class="remote-action focusable" type="button" hidden>Remove</button>
+          <button id="remote-model" class="remote-choice focusable" type="button"><span>Remote</span><span class="value"></span></button>
         </div>
         <p class="remote-hint" id="remote-hint"></p>
       </div>
@@ -60,11 +70,11 @@
       <span id="remote-move-hint"><b>Arrows</b> Move</span>
       <span id="remote-select-hint"><b>OK</b> Select</span>
       <span id="remote-back-hint"><b>Back</b> Settings</span>
-      <span id="remote-status"></span>
+      <span id="remote-status" class="status"></span>
     </footer>
   </main>
 
-  <main id="settings-view" hidden>
+  <main id="settings-view" class="panel-view" hidden>
     <header>
       <div class="time"><span class="clock"></span><span class="date"></span></div>
       <p class="view-name">Settings</p>
@@ -112,9 +122,9 @@
             <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
             <span class="value">Loading…</span>
           </button>
-          <button class="setting choice-setting focusable" id="remoteButtons" data-nav-left="brightness" type="button">
+          <button class="setting choice-setting focusable" id="remoteButtons" data-view="remote" data-nav-left="brightness" type="button">
             <span class="copy"><strong>Remote buttons</strong><small>Disable or reassign remote buttons</small></span>
-            <span class="value" id="remote-summary">—</span>
+            <span class="value">—</span>
           </button>
         </div>
 
@@ -142,11 +152,16 @@
       <span id="move-hint"><b>Arrows</b> Move</span>
       <span id="select-hint"><b>OK</b> Select</span>
       <span id="back-hint"><b>Back</b> Home</span>
-      <span id="settings-status">Reading current settings…</span>
+      <span id="settings-status" class="status">Reading current settings…</span>
     </footer>
   </main>
-  <script src="app.js"></script>
+  <script src="webos.js"></script>
+  <script src="ui.js"></script>
+  <script src="home-logic.js"></script>
+  <script src="settings-logic.js"></script>
+  <script src="remote-logic.js"></script>
   <script src="settings.js"></script>
   <script src="remote.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

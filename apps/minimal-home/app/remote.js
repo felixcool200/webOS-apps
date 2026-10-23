@@ -1,115 +1,93 @@
-// The Remote buttons view inside Minimal Home: what each remote button does, next to a drawing of the
-// LG MR24 Magic Remote that outlines the button selected in the list. The bindings live in LG Input
-// Hook's keybinds.json, which the hook loaded by remote-hook/load-remote-hook.sh reapplies by itself
-// at the next key press after the file changes (see NEXT_SECOND), so a change takes effect right away. Home shows #remote-view and routes
-// keys and pointer movement here.
+// The Remote buttons view inside Minimal Home: what each remote button does. The list shows the buttons
+// of the chosen remote: the LG MR24 Magic Remote, drawn next to the list (the selected row's button is
+// outlined, and pointing at a drawn button selects its row), or Custom, your own named buttons for
+// anything the MR24 list doesn't cover. The rules live in remote-logic.js.
 //
-// Test remote lights the drawn buttons up as the TV receives them. During the test every listed button
-// is disabled so that pressing it only lights it up and selects its row, Home is disabled and the page
-// ignores the other keys too, and Back pressed twice stops the test (as does Home going out of sight). The real bindings wait in BACKUP and become active
-// again when the test stops, or at Home's next start if it was reloaded or the TV restarted meanwhile.
+// The bindings live in LG Input Hook's keybinds.json, which the hook loaded by
+// remote-hook/load-remote-hook.sh reapplies by itself at the next key press after the file changes (see
+// NEXT_SECOND), so a change takes effect right away. Home shows #remote-view and routes keys and pointer
+// movement here.
+//
+// Test remote lights buttons up as the TV receives them, and Add a button waits for the button to add.
+// Meanwhile every bindable button and Home are disabled so that pressing one does nothing else, and
+// the page ignores other keys; Back (twice for a test) ends it, as does Home going out of sight. The
+// real bindings wait in BACKUP and become active again when it ends, or the next time the bindings are
+// read (load) if Home was reloaded or the TV restarted meanwhile.
 var RemoteButtons = (function () {
   "use strict";
 
   var KEY = WebOS.KEY;
-  var rootExec = WebOS.rootExec;
+  var Logic = RemoteLogic;
+  // Also written in remote-hook/load-remote-hook.sh, which restores BACKUP at boot.
   var CONFIG = "/home/root/.config/lginputhook/keybinds.json";
   var BACKUP = CONFIG + ".before-test";
+  var HOOK_LOG = "/tmp/lginput-hook-lginput2.log";
   // At each key press the hook rereads CONFIG if its modification time, in whole seconds, has moved on.
   // So a change waits for the next second when CONFIG already changed in this one, and a restored file
   // gets the current time (mv keeps BACKUP's older one).
   var NEXT_SECOND = "[ \"$(date +%s)\" -gt \"$(stat -c %Y " + CONFIG + " 2>/dev/null || echo 0)\" ] || sleep 1; ";
   var RESTORE = "[ ! -f " + BACKUP + " ] || { " + NEXT_SECOND + "mv " + BACKUP + " " + CONFIG + " && touch " + CONFIG + "; }";
-  var HOOK_LOG = "/tmp/lginput-hook-lginput2.log";
-  var POWER = "luna-send -n 1 luna://com.webos.service.tvpower/power/";
-  // The hook runs it on the press and passes the release on, which does not wake the screen.
-  var SCREEN_TOGGLE = "if luna-send -n 1 -f luna://com.webos.service.tvpower/power/getPowerState '{}' </dev/null | grep -q '\"Screen Off\"'; " +
-    "then " + POWER + "turnOnScreen '{}' </dev/null >/dev/null; " +
-    "else " + POWER + "turnOffScreen '{}' </dev/null >/dev/null; fi";
   var SAVE_DELAY_MS = 500;
   // Right after the app manager restarts, Homebrew Channel's root service may not answer yet.
-  var RESTORE_RETRY_MS = [1000, 3000, 10000];
+  var RETRY_MS = [1000, 3000, 10000];
   var POLL_MS = 300;
   var LIT_MS = 900;
   var BACK_TWICE_MS = 2000;
-  // Home stays usable outside a test, but during one it would leave the page, so it only lights up too.
-  var HOME_CODE = "773";
-  var HINTS = {
-    browse: "The outlined button is the one selected in the list. Changes take effect right away. " +
-      "To find a button by pressing it, choose Test remote (Right from the list).",
-    test: "Every button now only lights up, and pressing a listed button selects its row. " +
-      "Press Back twice to stop the test."
-  };
-  // Buttons of the MR24 remote in reading order: the codes the hook logs (checked by pressing every
-  // button), a short label for the drawing, and the button's centre and size on a 210 x 960 grid
-  // traced from a photo (x from the remote's left edge, y from its top). Buttons marked `keep` are never
-  // bound or disabled, so the remote stays usable: OK, arrows, Back and Home.
-  var BUTTONS = [
-    { name: "Power", label: "", codes: [], x: 71, y: 30, w: 34, h: 34, round: true, power: true },
-    { name: "1", label: "1", codes: [2], x: 45, y: 80, w: 40, h: 40, round: true },
-    { name: "2", label: "2", codes: [3], x: 105, y: 80, w: 40, h: 40, round: true },
-    { name: "3", label: "3", codes: [4], x: 165, y: 80, w: 40, h: 40, round: true },
-    { name: "4", label: "4", codes: [5], x: 45, y: 130, w: 40, h: 40, round: true },
-    { name: "5", label: "5", codes: [6], x: 105, y: 130, w: 40, h: 40, round: true },
-    { name: "6", label: "6", codes: [7], x: 165, y: 130, w: 40, h: 40, round: true },
-    { name: "7", label: "7", codes: [8], x: 45, y: 181, w: 40, h: 40, round: true },
-    { name: "8", label: "8", codes: [9], x: 105, y: 181, w: 40, h: 40, round: true },
-    { name: "9", label: "9", codes: [10], x: 165, y: 181, w: 40, h: 40, round: true },
-    { name: "Guide", label: "Guide", codes: [362], x: 45, y: 232, w: 40, h: 40, round: true },
-    { name: "0", label: "0", codes: [11], x: 105, y: 232, w: 40, h: 40, round: true },
-    { name: "…", label: "…", codes: [994], x: 165, y: 232, w: 40, h: 40, round: true },
-    { name: "Volume +", label: "+", codes: [115], x: 45, y: 293, w: 40, h: 56 },
-    { name: "Volume −", label: "−", codes: [114], x: 45, y: 352, w: 40, h: 56 },
-    { name: "Mute", label: "Mute", codes: [113], x: 105, y: 320, w: 40, h: 40, round: true },
-    { name: "Channel ∧", label: "∧", codes: [402], x: 165, y: 293, w: 40, h: 56 },
-    { name: "Channel ∨", label: "∨", codes: [403], x: 165, y: 352, w: 40, h: 56 },
-    { name: "Mic", label: "Mic", codes: [428], x: 105, y: 385, w: 40, h: 40, round: true },
-    { name: "Home", label: "Home", codes: [773], x: 45, y: 410, w: 40, h: 40, round: true, keep: true },
-    { name: "Input", label: "Input", codes: [241], x: 165, y: 410, w: 40, h: 40, round: true },
-    { name: "Up", label: "▲", codes: [103], x: 105, y: 440, w: 60, h: 32, keep: true },
-    { name: "Left", label: "◀", codes: [105], x: 48, y: 495, w: 32, h: 60, keep: true },
-    { name: "OK", label: "OK", codes: [28, 272], x: 105, y: 495, w: 52, h: 52, round: true, keep: true },
-    { name: "Right", label: "▶", codes: [106], x: 162, y: 495, w: 32, h: 60, keep: true },
-    { name: "Down", label: "▼", codes: [108], x: 105, y: 550, w: 60, h: 32, keep: true },
-    { name: "Back", label: "Back", codes: [412], x: 45, y: 590, w: 40, h: 40, round: true, keep: true },
-    { name: "Settings", label: "Set", codes: [139], x: 165, y: 590, w: 40, h: 40, round: true },
-    { name: "Red", label: "", codes: [398], x: 42, y: 630, w: 34, h: 16, colour: "#e5484d" },
-    { name: "Green", label: "", codes: [399], x: 83, y: 630, w: 34, h: 16, colour: "#30a46c" },
-    { name: "Yellow", label: "", codes: [400], x: 127, y: 630, w: 34, h: 16, colour: "#f5d90a" },
-    { name: "Blue", label: "", codes: [401], x: 168, y: 630, w: 34, h: 16, colour: "#3e63dd" },
-    { name: "Netflix", label: "Netflix", codes: [1037], x: 60, y: 667, w: 86, h: 32 },
-    { name: "Prime Video", label: "Prime", codes: [1038], x: 150, y: 667, w: 86, h: 32 },
-    { name: "Disney+", label: "Disney+", codes: [1042], x: 60, y: 707, w: 86, h: 32 },
-    { name: "Rakuten TV", label: "Rakuten", codes: [1044], x: 150, y: 707, w: 86, h: 32 },
-    { name: "Google Assistant", label: "Google", codes: [1043], x: 60, y: 743, w: 86, h: 32 },
-    { name: "Alexa", label: "Alexa", codes: [1086], x: 150, y: 743, w: 86, h: 32 }
-  ];
+  var CAPTURE_MS = 15000;
+  var REMOTE_KEY = "remote.model";
+  var CUSTOM_KEY = "remote.customButtons";
+  var REMOTES = [{ id: "mr24", name: "LG MR24" }, { id: "custom", name: "Custom" }];
   var WIDTH = 210;
   var HEIGHT = 960;
+  var HINTS = {
+    mr24: "The outlined button is the one selected in the list; pointing at a drawn button and pressing OK " +
+      "selects its row. Changes take effect right away. Test remote finds a button by pressing it.",
+    custom: "Your own buttons, for another remote or buttons the MR24 list lacks. Add one at the end of the " +
+      "list, then name or remove it here. Changes take effect right away.",
+    test: "Every button now only lights up, and pressing a listed button selects its row. Press Back twice " +
+      "to stop the test.",
+    capture: "Press the button to add within 15 seconds. Back cancels."
+  };
+  var NO_HOOK = "The button hook isn't loaded, so changes have no effect (see Remote button hook in the README)";
 
-  var binds = null;
+  var host = null;
   var apps = [];
+  // The bindings as last read, null until read once. Changes wait until they were read since the
+  // view opened (fresh), so a change can never be made to an outdated copy and overwrite the file.
+  var binds = null;
+  var fresh = false;
+  var readError = null;
+  var hooked = null;
+  // Bindings made some other way, remembered so they stay on offer as Custom (see Logic.choices).
+  var originals = {};
+  var remote = "mr24";
+  var custom = [];
   var selected = null;
-  // The row whose action Left/Right change, entered with OK as in the Settings view.
+  // The row or the remote choice whose value Left/Right change, entered with OK as in Settings.
   var editing = null;
-  // The code of the row selected last, to return to from the Test remote button.
+  // The code of the row selected last, or "add" for Add a button; the drawing and the card show it.
   var lastCode = null;
-  var testing = false;
+  // "test", "capture" (waiting for a button to add) or null.
+  var listening = null;
   var backPressedAt = 0;
-  // Where changes are saved: CONFIG, or BACKUP while the test has the buttons disabled.
+  var captureTimer = null;
+  // The code being renamed, while the name field is open.
+  var renaming = null;
+  // Where changes are saved: CONFIG, or BACKUP while the buttons are disabled (or could not be restored).
   var target = CONFIG;
   var saveTimer = null;
   var pollTimer = null;
   var pollRun = 0;
   var position = null;
-  var isSetUp = false;
+  var drawn = [];
+  var isBuilt = false;
   // File changes run one after another, so the buttons can never be restored before they are disabled.
   var work = Promise.resolve();
 
+  function $(id) { return document.getElementById(id); }
+
   function setStatus(message, type) {
-    var box = document.getElementById("remote-status");
-    box.textContent = message;
-    box.className = type || "";
+    UI.setStatus("remote-status", message, type);
   }
 
   function queue(task) {
@@ -117,84 +95,78 @@ var RemoteButtons = (function () {
     return work;
   }
 
-  // Runs a shell command as root; rejects when it fails or Homebrew Channel does not answer.
-  function shell(command) {
-    return rootExec(command).then(function (result) {
-      if (!result || result.returnValue === false) { throw new Error((result && result.errorText) || "No response"); }
-      return result;
-    });
+  function readStored(key) {
+    try { return window.localStorage.getItem(key); }
+    catch (error) {
+      console.warn("Could not read " + key + ": " + error.message);
+      return null;
+    }
   }
 
-  function testButton() {
-    return document.getElementById("remote-test");
+  function store(key, value) {
+    try { window.localStorage.setItem(key, value); }
+    catch (error) { setStatus("Could not save: " + error.message, "error"); }
   }
 
-  function buttonFor(code) {
-    return BUTTONS.filter(function (button) { return button.codes.indexOf(code) >= 0; })[0];
+  function listed() {
+    return Logic.listedCodes(remote, binds, custom);
   }
 
-  function isKept(code) {
-    var button = buttonFor(code);
-    return button ? !!button.keep : false;
-  }
-
-  // The listed buttons' codes: every button that can be bound, plus codes bound some other way.
-  function listedCodes() {
-    var codes = [];
-    BUTTONS.forEach(function (button) {
-      if (!button.keep && button.codes.length) { codes.push(String(button.codes[0])); }
-    });
-    Object.keys(binds || {}).forEach(function (code) {
-      if (codes.indexOf(code) < 0 && !isKept(Number(code))) { codes.push(code); }
-    });
-    return codes;
+  function isCustom(code) {
+    return custom.some(function (button) { return button.code === code; });
   }
 
   function updateSummary() {
     var count = Object.keys(binds || {}).length;
-    var summary = document.getElementById("remote-summary");
-    if (summary) { summary.textContent = count ? count + " changed" : "None changed"; }
+    host.setLinkValue("remote", binds === null ? "—" : count ? count + " changed" : "None changed");
   }
 
-  // Reads the bindings for the list and the Settings summary, first making the real ones active again
-  // if Home was closed during a test. During a test, binds already holds the real bindings.
+  // Reads the bindings, first making the real ones active again if a test was cut short. Skipped
+  // while listening, when binds already holds the real bindings.
   function load() {
     return queue(function () {
-      if (target === BACKUP) { return null; }
-      return shell(RESTORE + "; cat " + CONFIG + " 2>/dev/null || echo '{}'").then(function (result) {
-        binds = JSON.parse(result.stdoutString || "{}");
+      if (listening) { return null; }
+      return WebOS.retry(function () {
+        return WebOS.rootShell(RESTORE + "; if [ -f " + HOOK_LOG + " ]; then echo hooked; else echo unhooked; fi; " +
+          "cat " + CONFIG + " 2>/dev/null || echo '{}'");
+      }, RETRY_MS).then(function (result) {
+        var output = result.stdoutString || "";
+        var lineEnd = output.indexOf("\n");
+        var read = JSON.parse(output.slice(lineEnd + 1) || "{}");
+        hooked = output.slice(0, lineEnd) === "hooked";
+        binds = read && typeof read === "object" && !Array.isArray(read) ? read : {};
+        originals = Object.assign({}, originals, Logic.customBinds(binds, apps));
+        target = CONFIG;
+        fresh = true;
+        readError = null;
       }).catch(function (error) {
+        readError = error.message;
         console.warn("Could not read the remote button bindings: " + error.message);
-        binds = binds || {};
       }).then(updateSummary);
     });
   }
 
   function writeFile(path, data) {
-    return shell((path === CONFIG ? NEXT_SECOND : "") + "echo " + window.btoa(JSON.stringify(data)) + " | base64 -d > " + path + ".new && mv " + path + ".new " + path);
+    return WebOS.rootShell((path === CONFIG ? NEXT_SECOND : "") + "echo " + WebOS.base64(JSON.stringify(data)) +
+      " | base64 -d > " + path + ".new && mv " + path + ".new " + path);
   }
 
-  // Sets the real bindings aside and disables every listed button until the test stops.
+  // Sets the real bindings aside and disables every bindable button and Home.
   function setAside() {
-    var disabled = {};
-    listedCodes().concat(HOME_CODE).forEach(function (code) { disabled[code] = { action: "ignore" }; });
-    return shell("[ -f " + BACKUP + " ] || cp " + CONFIG + " " + BACKUP + " 2>/dev/null || echo '{}' > " + BACKUP)
+    var disabled = Logic.disabledBinds(Logic.testCodes(listed()));
+    return WebOS.rootShell("[ -f " + BACKUP + " ] || cp " + CONFIG + " " + BACKUP + " 2>/dev/null || echo '{}' > " + BACKUP)
       .then(function () {
         target = BACKUP;
         return writeFile(CONFIG, disabled);
       });
   }
 
-  // Makes the real bindings active again. Safe to call when nothing was set aside. Resolves to whether
-  // it worked.
-  function restore(attempt) {
-    return shell(RESTORE).then(function () { return true; }).catch(function (error) {
-      if (attempt >= RESTORE_RETRY_MS.length) {
-        console.warn("Could not restore the remote button bindings: " + error.message);
-        return false;
-      }
-      return new Promise(function (resolve) { window.setTimeout(resolve, RESTORE_RETRY_MS[attempt]); })
-        .then(function () { return restore(attempt + 1); });
+  // Makes the real bindings active again; until that works, changes keep going to BACKUP.
+  function restore() {
+    return WebOS.retry(function () { return WebOS.rootShell(RESTORE); }, RETRY_MS).then(function () {
+      target = CONFIG;
+    }).catch(function (error) {
+      setStatus("Could not turn the buttons back on (" + error.message + ") · reopen this page to retry", "error");
     });
   }
 
@@ -218,85 +190,104 @@ var RemoteButtons = (function () {
     return save();
   }
 
-  // The actions a button can cycle through; a binding made elsewhere shows as Custom until changed.
-  function choices(code) {
-    var list = [
-      { label: "Normal", bind: null },
-      { label: "Disabled", bind: { action: "ignore" } },
-      { label: "Screen on/off", bind: { action: "exec", command: SCREEN_TOGGLE } }
-    ];
-    apps.forEach(function (app) {
-      list.push({ label: "Open " + (app.title || app.id), bind: { action: "launch", id: app.id } });
-    });
-    var current = binds[code];
-    if (current && indexOf(list, current) < 0) { list.splice(1, 0, { label: "Custom", bind: current }); }
-    return list;
+  function choicesFor(code) {
+    return Logic.choices(apps, binds[code], originals[code]);
   }
 
-  function indexOf(list, bind) {
-    for (var i = 0; i < list.length; i += 1) {
-      if (JSON.stringify(list[i].bind) === JSON.stringify(bind || null)) { return i; }
-    }
-    return -1;
+  function rowFor(code) {
+    if (code === null) { return null; }
+    return code === "add" ? $("remote-add") : document.querySelector('#remote-list [data-code="' + code + '"]');
+  }
+
+  function firstRow() {
+    return document.querySelector("#remote-list .focusable");
   }
 
   function makeRow(code) {
-    var button = buttonFor(Number(code));
     var row = document.createElement("button");
     row.type = "button";
     row.className = "setting focusable";
     row.setAttribute("data-code", code);
-    var name = document.createElement("strong");
-    name.textContent = button ? button.name : "Button " + code;
+    var name = document.createElement("span");
+    name.className = "copy";
+    var label = document.createElement("strong");
+    label.textContent = Logic.nameFor(code, custom);
+    var number = document.createElement("small");
+    number.textContent = code;
+    name.appendChild(label);
+    name.appendChild(number);
     var value = document.createElement("span");
     value.className = "value";
     row.appendChild(name);
     row.appendChild(value);
     renderValue(row);
-    // OK, or a click with the pointer, starts or ends changing the action, except during a test.
+    // OK, or a click with the pointer, starts or ends changing the action.
     row.addEventListener("click", function () {
-      if (testing) { return; }
+      if (listening) { return; }
       if (editing === row) { stopEditing(); }
       else { startEditing(row); }
     });
     return row;
   }
 
-  function renderValue(row) {
-    var code = row.getAttribute("data-code");
-    var list = choices(code);
-    row.querySelector(".value").textContent = list[Math.max(0, indexOf(list, binds[code]))].label;
+  function makeAddRow() {
+    var row = document.createElement("button");
+    row.type = "button";
+    row.id = "remote-add";
+    row.className = "setting focusable";
+    row.innerHTML = '<span class="copy"><strong>Add a button</strong><small>OK, then press the button</small></span><span class="value"></span>';
+    row.addEventListener("click", function () {
+      if (!listening) { listen("capture"); }
+    });
+    return row;
   }
 
-  function rowFor(code) {
-    return code === null ? null : document.querySelector('#remote-list [data-code="' + code + '"]');
+  function renderValue(row) {
+    var code = row.getAttribute("data-code");
+    var list = binds ? choicesFor(code) : null;
+    row.querySelector(".value").textContent = list ? list[Math.max(0, Logic.indexOf(list, binds[code]))].label : "—";
   }
 
   function render() {
     stopEditing();
-    var box = document.getElementById("remote-list");
+    var box = $("remote-list");
     box.textContent = "";
-    listedCodes().forEach(function (code) { box.appendChild(makeRow(code)); });
-    if (selected !== testButton()) { setFocus(rowFor(lastCode) || box.querySelector(".focusable")); }
+    listed().forEach(function (code) { box.appendChild(makeRow(code)); });
+    if (remote === "custom") { box.appendChild(makeAddRow()); }
+    if (!isSide(selected)) { setFocus(rowFor(lastCode) || firstRow()); }
+    showRemote();
   }
 
-  // Draws the remote and wires up the Test remote button, the first time the view opens.
-  function setUp() {
-    if (isSetUp) { return; }
-    isSetUp = true;
-    testButton().addEventListener("click", function () {
-      setFocus(testButton());
-      if (testing) { stopTest(); } else { startTest(); }
+  // Draws the remote and wires up the buttons beside the list, the first time the view opens.
+  function build() {
+    if (isBuilt) { return; }
+    isBuilt = true;
+    $("remote-test").addEventListener("click", function () {
+      setFocus($("remote-test"));
+      if (listening === "test") { stopListening(""); }
+      else if (!listening) { listen("test"); }
     });
+    $("remote-model").addEventListener("click", function () {
+      if (listening) { return; }
+      if (editing === $("remote-model")) { stopEditing(); }
+      else { startEditing($("remote-model")); }
+    });
+    $("remote-rename").addEventListener("click", function () {
+      if (!listening && lastCode && lastCode !== "add") { startRename(lastCode); }
+    });
+    $("remote-remove").addEventListener("click", function () {
+      if (!listening && isCustom(lastCode)) { removeButton(lastCode); }
+    });
+    $("remote-name").addEventListener("blur", function () { finishRename(true); });
     // Another app or the screensaver taking over must not leave the buttons disabled.
     document.addEventListener("visibilitychange", function () {
-      if (document.hidden && testing) { stopTest(); }
+      if (document.hidden && listening) { stopListening(""); }
     });
-    var remote = document.getElementById("remote-drawing");
+    var drawing = $("remote-drawing");
     var ring = document.createElement("div");
     ring.className = "wheel-ring";
-    remote.appendChild(ring);
-    BUTTONS.forEach(function (button) {
+    drawing.appendChild(ring);
+    Logic.MR24.forEach(function (button) {
       var element = document.createElement("div");
       element.className = "remote-button" + (button.round ? " round" : "") + (button.power ? " power" : "");
       element.style.left = (button.x - button.w / 2) / WIDTH * 100 + "%";
@@ -305,9 +296,24 @@ var RemoteButtons = (function () {
       element.style.height = button.h / HEIGHT * 100 + "%";
       if (button.colour) { element.style.background = button.colour; }
       element.textContent = button.label;
-      button.element = element;
-      remote.appendChild(element);
+      element.addEventListener("click", function () { pickFromDrawing(button); });
+      drawn.push({ button: button, element: element });
+      drawing.appendChild(element);
     });
+  }
+
+  function drawnFor(code) {
+    var button = Logic.buttonFor(code);
+    return drawn.filter(function (entry) { return entry.button === button; })[0];
+  }
+
+  // Pointing at a drawn button and pressing OK selects its row.
+  function pickFromDrawing(button) {
+    if (listening || renaming !== null) { return; }
+    if (button.power) { setStatus("Power never reaches the TV's software, so it can't be changed"); return; }
+    if (button.keep) { setStatus(button.name + " stays as it is so the remote remains usable"); return; }
+    setFocus(rowFor(String(button.codes[0])));
+    setStatus("");
   }
 
   function light(element) {
@@ -316,72 +322,235 @@ var RemoteButtons = (function () {
     void element.offsetWidth;
     element.classList.add("lit");
     window.clearTimeout(element.litTimer);
-    element.litTimer = window.setTimeout(function () { element.classList.remove("lit"); }, LIT_MS);
+    element.litTimer = window.setTimeout(function () {
+      element.classList.remove("lit");
+      if (element === $("remote-card")) { showSelection(); }
+    }, LIT_MS);
   }
 
-  // Outlines the drawn button of the selected row, or none when the row has no drawn button.
-  function outline(code) {
-    var match = code ? buttonFor(Number(code)) : null;
-    BUTTONS.forEach(function (button) { button.element.classList.toggle("is-selected", button === match); });
+  // Shows the remote beside the list: the drawing or the card, the remote choice, and the selection.
+  function showRemote() {
+    var isCustomRemote = remote === "custom";
+    $("remote-drawing").hidden = isCustomRemote;
+    $("remote-card").hidden = !isCustomRemote;
+    $("remote-model").querySelector(".value").textContent = REMOTES.filter(function (entry) { return entry.id === remote; })[0].name;
+    showSelection();
   }
 
-  // A press on the remote lights the button up and, for listed buttons, selects its row.
+  // Outlines the selected row's drawn button, or shows it on the card with what can be done to it.
+  function showSelection() {
+    var code = lastCode === "add" ? null : lastCode;
+    var match = code ? drawnFor(code) : null;
+    drawn.forEach(function (entry) { entry.element.classList.toggle("is-selected", entry === match); });
+    if (remote !== "custom") { return; }
+    showCard(code);
+    $("remote-rename").hidden = !code || !!listening;
+    $("remote-remove").hidden = !isCustom(code) || !!listening;
+  }
+
+  function showCard(code) {
+    if (renaming !== null) { return; }
+    $("remote-card-title").textContent = code ? Logic.nameFor(code, custom) : lastCode === "add" ? "New button" : "No button selected";
+    $("remote-card-code").textContent = code ? "Code " + code : lastCode === "add" ? "OK, then press it on the remote" : "";
+  }
+
+  // A press seen in the button log while listening.
   function pressed(code) {
-    var button = buttonFor(code);
-    if (button) { light(button.element); }
-    var row = rowFor(String(code));
+    if (listening === "capture") {
+      if (Logic.canAdd(code)) { captured(code); }
+      return;
+    }
+    if (remote === "custom") {
+      showCard(code);
+      light($("remote-card"));
+    } else if (drawnFor(code)) {
+      light(drawnFor(code).element);
+    }
+    var row = rowFor(code);
     if (row) {
       setFocus(row);
       setStatus("");
-    } else if (!button) {
-      setStatus("Unknown button · code " + code);
+    } else if (!Logic.isKept(code) && (remote === "custom" || !drawnFor(code))) {
+      setStatus(Logic.nameFor(code, custom) + " (code " + code + ") is not in the list" +
+        (remote === "custom" ? " · add it with Add a button" : ""));
     }
   }
 
   // Reads the codes of button presses logged after `position`, in one pass so no line is missed. A
-  // read that is still running when the test stops (pollRun changes) is dropped.
+  // read that is still running when listening stops (pollRun changes) is dropped.
   function poll(run) {
     var start = position === null ? -1 : position;
-    rootExec("awk -v s=" + start + " 'NR>s && s>=0 && /state=1 uinput_code=/ { match($0, /uinput_code=[0-9]+/); " +
+    WebOS.rootShell("[ -f " + HOOK_LOG + " ] || { echo '#missing'; exit 0; }; awk -v s=" + start +
+      " 'NR>s && s>=0 && /state=1 uinput_code=/ { match($0, /uinput_code=[0-9]+/); " +
       "print substr($0, RSTART + 12, RLENGTH - 12) } END { print \"#\" NR }' " + HOOK_LOG).then(function (result) {
       if (run !== pollRun) { return; }
-      var lines = ((result && result.stdoutString) || "").trim().split("\n");
-      var total = parseInt(lines.pop().replace("#", ""), 10);
-      // The log starts over at every boot.
-      position = position !== null && total < position ? 0 : total;
-      lines.forEach(function (line) { if (line) { pressed(parseInt(line, 10)); } });
+      var found = Logic.readPresses(result.stdoutString, position);
+      if (found.missing) {
+        setStatus(NO_HOOK, "error");
+        return;
+      }
+      position = found.position;
+      found.codes.forEach(pressed);
     }).catch(function (error) {
       if (run === pollRun) { setStatus("Could not read the button log: " + error.message, "error"); }
     }).then(function () {
-      if (run === pollRun) { pollTimer = window.setTimeout(function () { poll(run); }, POLL_MS); }
+      if (run === pollRun && listening) { pollTimer = window.setTimeout(function () { poll(run); }, POLL_MS); }
+    });
+  }
+
+  function listen(kind) {
+    stopEditing();
+    listening = kind;
+    backPressedAt = 0;
+    showMode();
+    setStatus(kind === "test" ? "Press any button on the remote" : "Press the button to add");
+    if (kind === "capture") {
+      captureTimer = window.setTimeout(function () { stopListening("No button pressed"); }, CAPTURE_MS);
+    }
+    pollRun += 1;
+    position = null;
+    poll(pollRun);
+    queue(function () {
+      return Promise.resolve(flush()).then(setAside).catch(function (error) {
+        setStatus("Buttons may open things meanwhile: " + error.message, "error");
+      });
+    });
+  }
+
+  // Stops listening and makes the real bindings active again. Returns when that is done.
+  function stopListening(message) {
+    listening = null;
+    pollRun += 1;
+    window.clearTimeout(pollTimer);
+    window.clearTimeout(captureTimer);
+    showMode();
+    setStatus(message);
+    return queue(function () {
+      return Promise.resolve(flush()).then(restore);
+    });
+  }
+
+  // The button to add was pressed: add it to the Custom remote and ask for its name.
+  function captured(code) {
+    stopListening("");
+    if (isCustom(code)) {
+      setFocus(rowFor(code));
+      setStatus(Logic.nameFor(code, custom) + " is already on your remote");
+      return;
+    }
+    custom = Logic.withButton(custom, code, "");
+    store(CUSTOM_KEY, JSON.stringify(custom));
+    lastCode = code;
+    render();
+    startRename(code);
+  }
+
+  function startRename(code) {
+    stopEditing();
+    renaming = code;
+    var field = $("remote-name");
+    field.value = Logic.nameFor(code, custom);
+    $("remote-card-title").hidden = true;
+    field.hidden = false;
+    // Focusing the field brings up the TV's keyboard.
+    field.focus();
+    field.select();
+    showMode();
+    setStatus("Type a name, then OK");
+  }
+
+  function finishRename(keep) {
+    if (renaming === null) { return; }
+    var code = renaming;
+    var field = $("remote-name");
+    renaming = null;
+    field.hidden = true;
+    $("remote-card-title").hidden = false;
+    field.blur();
+    if (keep) {
+      custom = Logic.withButton(custom, code, field.value);
+      store(CUSTOM_KEY, JSON.stringify(custom));
+      lastCode = code;
+      render();
+      setStatus("Saved", "ok");
+    } else {
+      setStatus("");
+    }
+    showMode();
+  }
+
+  // Takes a button off the Custom remote; whatever it was set to do is undone too.
+  function removeButton(code) {
+    var name = Logic.nameFor(code, custom);
+    var row = rowFor(code);
+    var next = row && (row.nextElementSibling || row.previousElementSibling);
+    custom = Logic.withoutButton(custom, code);
+    store(CUSTOM_KEY, JSON.stringify(custom));
+    if (binds && binds[code]) {
+      delete binds[code];
+      scheduleSave();
+    }
+    lastCode = next ? next.getAttribute("data-code") || "add" : null;
+    render();
+    setFocus(rowFor(lastCode) || firstRow());
+    setStatus("Removed " + name);
+  }
+
+  function switchRemote(step) {
+    var index = REMOTES.map(function (entry) { return entry.id; }).indexOf(remote);
+    remote = REMOTES[(index + step + REMOTES.length) % REMOTES.length].id;
+    store(REMOTE_KEY, remote);
+    lastCode = null;
+    render();
+    // render() ends editing; keep changing the remote.
+    startEditing($("remote-model"));
+  }
+
+  function isSide(element) {
+    return !!element && !!element.closest && !!element.closest(".remote-stage");
+  }
+
+  // The buttons beside the list, top to bottom.
+  function sideItems() {
+    return Array.prototype.filter.call(document.querySelectorAll(".remote-stage .focusable"), function (element) {
+      return !element.hidden && !element.closest("[hidden]");
     });
   }
 
   function showMode() {
-    var button = testButton();
-    button.textContent = testing ? "Stop test" : "Test remote";
-    button.classList.toggle("is-active", testing);
-    document.getElementById("remote-hint").textContent = testing ? HINTS.test : HINTS.browse;
+    var test = $("remote-test");
+    test.textContent = listening === "test" ? "Stop test" : "Test remote";
+    test.classList.toggle("is-active", listening === "test");
+    $("remote-hint").textContent = listening ? HINTS[listening] : HINTS[remote];
+    showSelection();
     updateHints();
   }
 
   function updateHints() {
-    var hints = testing ? ["", "", "<b>Back twice</b> Stop test"] :
-      editing ? ["<b>← →</b> Change", "<b>OK</b> Done", "<b>Back</b> Done"] :
+    var hints = listening === "test" ? ["", "", "<b>Back twice</b> Stop test"] :
+      listening === "capture" ? ["", "", "<b>Back</b> Cancel"] :
+      renaming !== null ? ["", "<b>OK</b> Save", "<b>Back</b> Cancel"] :
+      editing ? ["<b>Left/Right</b> Change", "<b>OK</b> Done", "<b>Back</b> Done"] :
       ["<b>Arrows</b> Move", "<b>OK</b> Select", "<b>Back</b> Settings"];
     ["move", "select", "back"].forEach(function (name, index) {
-      var hint = document.getElementById("remote-" + name + "-hint");
+      var hint = $("remote-" + name + "-hint");
       hint.innerHTML = hints[index];
       hint.hidden = !hints[index];
     });
   }
 
-  function startEditing(row) {
-    setFocus(row);
-    editing = row;
-    row.classList.add("is-editing");
+  function startEditing(element) {
+    if (element !== $("remote-model") && !fresh) {
+      setStatus(readError ? "Could not read the bindings (" + readError + ") · reopen this page to retry" : "Reading the bindings…",
+        readError ? "error" : "");
+      return;
+    }
+    setFocus(element);
+    editing = element;
+    element.classList.add("is-editing");
     updateHints();
-    setStatus("Editing " + row.querySelector("strong").textContent + " · Left/Right changes");
+    setStatus(element === $("remote-model") ? "Choosing the remote · Left/Right changes" :
+      "Editing " + element.querySelector("strong").textContent + " · Left/Right changes");
   }
 
   function stopEditing() {
@@ -392,93 +561,70 @@ var RemoteButtons = (function () {
     setStatus("");
   }
 
-  function startTest() {
-    testing = true;
-    backPressedAt = 0;
-    showMode();
-    setStatus("Press any button on the remote");
-    pollRun += 1;
-    position = null;
-    poll(pollRun);
-    queue(function () {
-      return Promise.resolve(flush()).then(setAside).catch(function (error) {
-        setStatus("Buttons may open things during the test: " + error.message, "error");
-      });
-    });
-  }
-
-  // Stops lighting buttons up and makes the real bindings active again. Returns when that is done.
-  function stopTest() {
-    testing = false;
-    pollRun += 1;
-    window.clearTimeout(pollTimer);
-    showMode();
-    setStatus("");
-    return queue(function () {
-      return Promise.resolve(flush()).then(function () { return restore(0); }).then(function (restored) {
-        target = CONFIG;
-        if (!restored) { setStatus("Could not turn the buttons back on · Home retries at its next start", "error"); }
-      });
-    });
-  }
-
   function setFocus(element) {
     if (!element) { return; }
     if (editing && element !== editing) { stopEditing(); }
-    if (selected) { selected.classList.remove("is-focused"); }
-    selected = element;
-    selected.classList.add("is-focused");
-    var code = selected.getAttribute("data-code");
-    outline(code);
-    if (!code) { return; }
-    lastCode = code;
-    // Scroll the list just enough to show the whole row (offsets are relative to the list).
-    var list = selected.parentNode;
-    var bottom = selected.offsetTop + selected.offsetHeight;
-    if (selected.offsetTop < list.scrollTop) { list.scrollTop = selected.offsetTop; }
-    else if (bottom > list.scrollTop + list.clientHeight) { list.scrollTop = bottom - list.clientHeight; }
+    selected = UI.moveFocus(selected, element);
+    if (isSide(element)) { return; }
+    lastCode = element.getAttribute("data-code") || "add";
+    UI.keepInView(element);
+    showSelection();
   }
 
   function change(step) {
-    var code = selected && selected.getAttribute("data-code");
-    if (!code) { return; }
-    var list = choices(code);
-    var index = (Math.max(0, indexOf(list, binds[code])) + step + list.length) % list.length;
+    var code = editing.getAttribute("data-code");
+    var list = choicesFor(code);
+    var index = (Math.max(0, Logic.indexOf(list, binds[code])) + step + list.length) % list.length;
     if (list[index].bind) { binds[code] = list[index].bind; }
     else { delete binds[code]; }
-    renderValue(selected);
+    renderValue(editing);
     setStatus("");
     scheduleSave();
   }
 
-  // Returns "leave" when Back should take the user back to Settings. During a test, keys only light up
-  // and Back pressed twice stops it.
+  // Returns "leave" when Back should take the user back to Settings. While the name field is open,
+  // keys other than OK and Back are left to it.
   function handleKey(event) {
-    event.preventDefault();
     var key = event.keyCode;
-    if (testing) {
+    if (renaming !== null) {
+      if (key === KEY.ENTER || key === KEY.BACK) {
+        event.preventDefault();
+        finishRename(key === KEY.ENTER);
+      }
+      return null;
+    }
+    event.preventDefault();
+    if (listening) {
       if (key !== KEY.BACK || event.repeat) { return null; }
-      if (Date.now() - backPressedAt < BACK_TWICE_MS) { stopTest(); }
+      if (listening === "capture") { stopListening("Cancelled"); }
+      else if (Date.now() - backPressedAt < BACK_TWICE_MS) { stopListening(""); }
       else {
         backPressedAt = Date.now();
         setStatus("Press Back again to stop the test");
       }
-    } else if (key === KEY.BACK) {
+      return null;
+    }
+    if (key === KEY.BACK) {
       if (!editing) { return "leave"; }
       stopEditing();
-    } else if (!selected || (key === KEY.ENTER && event.repeat)) {
       return null;
-    } else if (editing && (key === KEY.LEFT || key === KEY.RIGHT)) {
-      change(key === KEY.RIGHT ? 1 : -1);
+    }
+    if (!selected || (key === KEY.ENTER && event.repeat)) { return null; }
+    if (editing && (key === KEY.LEFT || key === KEY.RIGHT)) {
+      if (editing === $("remote-model")) { switchRemote(key === KEY.RIGHT ? 1 : -1); }
+      else { change(key === KEY.RIGHT ? 1 : -1); }
     } else if (key === KEY.ENTER) {
       selected.click();
-    } else if (selected === testButton()) {
-      // The list is below and to the left of the button.
-      if (key === KEY.DOWN || key === KEY.LEFT) { setFocus(rowFor(lastCode) || document.querySelector("#remote-list .focusable")); }
+    } else if (isSide(selected)) {
+      var items = sideItems();
+      var index = items.indexOf(selected);
+      if (key === KEY.UP) { setFocus(items[index - 1]); }
+      else if (key === KEY.DOWN) { setFocus(items[index + 1]); }
+      else if (key === KEY.LEFT) { setFocus(rowFor(lastCode) || firstRow()); }
     } else if (key === KEY.RIGHT) {
-      setFocus(testButton());
+      setFocus(sideItems()[0]);
     } else if (key === KEY.UP) {
-      setFocus(selected.previousElementSibling || testButton());
+      setFocus(selected.previousElementSibling || sideItems()[0]);
     } else if (key === KEY.DOWN) {
       setFocus(selected.nextElementSibling);
     }
@@ -486,30 +632,45 @@ var RemoteButtons = (function () {
   }
 
   function handlePointer(event) {
+    if (renaming !== null) { return; }
     var element = event.target.closest && event.target.closest("#remote-view .focusable");
-    // During a test the list follows the buttons pressed, not the pointer.
-    if (testing && element !== testButton()) { return; }
+    // While listening the list follows the buttons pressed, not the pointer.
+    if (listening && element !== $("remote-test")) { return; }
     if (element && element !== selected) { setFocus(element); }
   }
 
-  // installedApps: the apps Home knows about, offered as "Open …" actions.
-  function open(installedApps) {
-    apps = installedApps.slice().sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
-    setUp();
-    testing = false;
+  // host: Home's apps() (offered as "Open …" actions) and setLinkValue() for the Settings summary.
+  function attach(pageHost) {
+    host = pageHost;
+  }
+
+  function open() {
+    apps = host.apps().slice().sort(function (left, right) { return String(left.title).localeCompare(String(right.title)); });
+    build();
+    remote = readStored(REMOTE_KEY) === "custom" ? "custom" : "mr24";
+    custom = Logic.parseCustom(readStored(CUSTOM_KEY));
+    listening = null;
+    renaming = null;
+    fresh = false;
     showMode();
     setStatus("");
-    if (selected) { selected.classList.remove("is-focused"); }
+    UI.moveFocus(selected, null);
     selected = null;
-    // Show the bindings read at Home's start straight away, then the ones on the TV now.
-    if (binds) { render(); }
-    load().then(render);
+    // Show the bindings read at Home's start straight away (they can't be changed until read again).
+    render();
+    load().then(function () {
+      render();
+      if (readError) { setStatus("Could not read the bindings (" + readError + ") · reopen this page to retry", "error"); }
+      else if (!hooked) { setStatus(NO_HOOK, "error"); }
+      else if (!editing) { setStatus(""); }
+    });
   }
 
   // Ends a test and saves pending changes. Returns when the bindings are in place.
   function close() {
-    return testing ? stopTest() : queue(flush);
+    finishRename(true);
+    return listening ? stopListening("") : queue(flush);
   }
 
-  return { load: load, open: open, close: close, restore: function () { return restore(0); }, handleKey: handleKey, handlePointer: handlePointer };
+  return { attach: attach, load: load, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
 }());

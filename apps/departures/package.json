@@ -1,6 +1,6 @@
 {
   "name": "webos-departures",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": true,
   "description": "Live SL departures near home for rooted LG webOS TVs",
   "scripts": {

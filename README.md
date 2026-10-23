@@ -18,9 +18,10 @@ apps/departures/
 apps/minimal-home/
 vendor/lginputhook/     LG Input Hook (git submodule), source of the remote button hook binaries
 third_party/            notices and licences for those binaries
-shared/                 palette, page reset and Luna helpers used by every app
-scripts/build-app.js    merges shared/ into each app's style.css and app.js
+shared/                 palette, page reset, Luna and page helpers used by every app
+scripts/build-app.js    copies an app and shared/ into the app's build/
 scripts/deploy.sh       package, install and launch an app on the TV
+package.json            npm test: the tests of shared/ and every app
 ```
 
 Clone with `git clone --recurse-submodules`, or run `git submodule update --init` in an existing clone: Minimal Home's build takes two files from `vendor/lginputhook`.
@@ -33,7 +34,17 @@ npm install
 npm run package
 ```
 
-Packaging first builds the app into its `build/` directory, where `shared/base.css` and `shared/webos.js` are put in front of the app's own `style.css` and `app.js`. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
+Packaging first builds the app into its `build/` directory: a copy of its `app/` folder with the shared files (`base.css`, `webos.js`, `ui.js`, `splash.png`) next to its own. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
+
+## Tests
+
+Each app keeps the rules that need no page or TV (parsing departures, arranging the app grid, which remote buttons are listed, stepping settings) in a `*-logic.js` file with tests in its `test/` folder. Run them all from the repository root with Node 18 or later:
+
+```sh
+npm test
+```
+
+Everything else is checked on the TV.
 
 Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest. Do not publish a Departures IPK built with a Trafiklab key; see its README.
 
@@ -128,7 +139,7 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   'chmod 755 /home/root/use-remote-buttons.sh && /home/root/use-remote-buttons.sh'
 ```
 
-It copies `remote-hook/load-remote-hook.sh` to `/var/lib/webosbrew/init.d/60-remote-buttons`, which loads the library at every boot unless it is already loaded. To stop it, remove that file and reboot; the remote then works as from the factory.
+It copies `remote-hook/load-remote-hook.sh` to `/var/lib/webosbrew/init.d/60-remote-buttons`, which loads the library at every boot unless it is already loaded. It waits for the input program in the background, so later boot scripts aren't held up, and writes LG Input Hook's `/tmp/inputhook` marker so that app, if installed again, doesn't load the library a second time. To stop it, remove that file and reboot; the remote then works as from the factory.
 
 The binaries are `ezinject` (Zlib) and `libinputhookpp.so` (GPL-3.0, with Frida Gum under the wxWindows Library Licence). Their notices and licences are in `third_party/remote-hook/` and are packaged with Minimal Home. A Minimal Home IPK therefore contains GPL-3.0 code: publish it only together with those notices.
 

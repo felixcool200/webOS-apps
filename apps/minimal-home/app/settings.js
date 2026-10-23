@@ -1,10 +1,12 @@
 // The Settings view inside Minimal Home. Home shows #settings-view and routes keys and pointer
-// movement here while it is open; this module never listens on the document itself.
+// movement here while it is open; this module never listens on the document itself. Rows with a
+// data-view attribute lead to another view of the page.
 var MinimalSettings = (function () {
   "use strict";
 
   var KEY = WebOS.KEY;
   var rootLuna = WebOS.rootLuna;
+  var host = null;
   var selected = null;
   var editing = null;
   var horizontalReturn = null;
@@ -41,9 +43,7 @@ var MinimalSettings = (function () {
   };
 
   function setStatus(message, type) {
-    var box = document.getElementById("settings-status");
-    box.textContent = message;
-    box.className = type || "";
+    UI.setStatus("settings-status", message, type);
   }
 
   function labelFor(key, value) {
@@ -69,21 +69,7 @@ var MinimalSettings = (function () {
   }
 
   function allowedValues(key, response, current) {
-    var list = response && response.values && response.values.arrayExt ? response.values.arrayExt : [];
-    var values = list.filter(function (entry) { return entry.active !== false && entry.visible !== false; })
-      .map(function (entry) { return entry.value; });
-    if (values.indexOf(current) === -1) { values.unshift(current); }
-    if (SPECS[key].order) {
-      var order = SPECS[key].order;
-      values.sort(function (left, right) {
-        var leftIndex = order.indexOf(left);
-        var rightIndex = order.indexOf(right);
-        if (leftIndex < 0) { leftIndex = order.length; }
-        if (rightIndex < 0) { rightIndex = order.length; }
-        return leftIndex - rightIndex;
-      });
-    }
-    return values;
+    return SettingsLogic.allowedValues(response, current, SPECS[key].order);
   }
 
   function networkDetail(connection) {
@@ -167,18 +153,7 @@ var MinimalSettings = (function () {
   }
 
   function nextValue(key, direction) {
-    var spec = SPECS[key];
-    var item = state[key];
-    if (!item) { return undefined; }
-    if (spec.kind === "range") {
-      var next = Number(item.value) + spec.step * direction;
-      return Math.max(spec.min, Math.min(spec.max, next));
-    }
-    var values = item.values || [];
-    if (!values.length) { return undefined; }
-    var index = values.indexOf(item.value);
-    if (index < 0) { index = 0; }
-    return values[Math.max(0, Math.min(values.length - 1, index + direction))];
+    return SettingsLogic.nextValue(SPECS[key], state[key], direction);
   }
 
   function renderEditDirections(key) {
@@ -240,10 +215,7 @@ var MinimalSettings = (function () {
   }
 
   function setFocus(element) {
-    if (!element) { return; }
-    if (selected) { selected.classList.remove("is-focused"); }
-    selected = element;
-    if (selected) { selected.classList.add("is-focused"); }
+    if (element) { selected = UI.moveFocus(selected, element); }
   }
 
   function settingName(element) {
@@ -252,7 +224,7 @@ var MinimalSettings = (function () {
   }
 
   function updateHints(isEditing) {
-    document.getElementById("move-hint").innerHTML = isEditing ? "<b>← →</b> Change" : "<b>Arrows</b> Move";
+    document.getElementById("move-hint").innerHTML = isEditing ? "<b>Left/Right</b> Change" : "<b>Arrows</b> Move";
     document.getElementById("select-hint").innerHTML = isEditing ? "<b>OK</b> Done" : "<b>OK</b> Select";
     document.getElementById("back-hint").innerHTML = isEditing ? "<b>Back</b> Done" : "<b>Back</b> Home";
   }
@@ -388,6 +360,7 @@ var MinimalSettings = (function () {
       setStatus("Ready", "ok");
     } else if (event.keyCode === KEY.ENTER) {
       event.preventDefault();
+      if (event.repeat) { return null; }
       if (editing) { stopEditing(); }
       else if (selected && selected.getAttribute("data-setting")) { startEditing(selected); }
       else if (selected) { selected.click(); }
@@ -404,8 +377,22 @@ var MinimalSettings = (function () {
         else { startEditing(element); }
       });
     });
+    document.querySelectorAll("#settings-view [data-view]").forEach(function (element) {
+      element.addEventListener("click", function () { host.navigate(element.getAttribute("data-view")); });
+    });
     document.getElementById("advanced").addEventListener("click", openAdvanced);
     setFocus(document.querySelector("[data-setting]"));
+  }
+
+  // host: Home's navigate(view), used by the rows that lead to another view.
+  function attach(pageHost) {
+    host = pageHost;
+  }
+
+  // Shows a short summary, such as "2 changed", on the row that leads to that view.
+  function setLinkValue(view, text) {
+    var value = document.querySelector('#settings-view [data-view="' + view + '"] .value');
+    if (value) { value.textContent = text; }
   }
 
   // Reads the values in the background so they are already shown when the view opens.
@@ -425,5 +412,8 @@ var MinimalSettings = (function () {
     stopEditing(false);
   }
 
-  return { preload: preload, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
+  return {
+    attach: attach, preload: preload, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer,
+    setLinkValue: setLinkValue
+  };
 }());

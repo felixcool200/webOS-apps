@@ -14,18 +14,24 @@ mkdir -p "$(dirname "$CONFIG")"
 [ -f "$CONFIG" ] || echo '{}' > "$CONFIG"
 chmod 755 "$DIR/ezinject"
 
-# The remote's input program may not be running yet this early in the boot; wait up to a minute.
-i=0
-while [ -z "$(pidof lginput2)" ] && [ "$i" -lt 60 ]; do
-  sleep 1
-  i=$((i + 1))
-done
-
-for name in RELEASE lginput2 micomservice tvservice testapp; do
-  for pid in $(pidof "$name"); do
-    # Already loaded, by an earlier run or by the LG Input Hook app.
-    grep -q libinputhookpp "/proc/$pid/maps" && continue
-    : > "/tmp/lginput-hook-$name.log"
-    "$DIR/ezinject" -l "/tmp/lginput-hook-$name.log" "$pid" "$DIR/libinputhookpp.so" > "/tmp/ezinject-$name.log" 2>&1
+# The remote's input program may not be running yet this early in the boot, so wait for it (up to a
+# minute) in the background instead of holding up the boot scripts after this one.
+(
+  i=0
+  while [ -z "$(pidof lginput2)" ] && [ "$i" -lt 60 ]; do
+    sleep 1
+    i=$((i + 1))
   done
-done
+
+  for name in RELEASE lginput2 micomservice tvservice testapp; do
+    for pid in $(pidof "$name"); do
+      # Already loaded, by an earlier run or by the LG Input Hook app.
+      grep -q libinputhookpp "/proc/$pid/maps" && continue
+      : > "/tmp/lginput-hook-$name.log"
+      "$DIR/ezinject" -l "/tmp/lginput-hook-$name.log" "$pid" "$DIR/libinputhookpp.so" > "/tmp/ezinject-$name.log" 2>&1
+    done
+  done
+  # LG Input Hook's own service loads the library only when this marker is missing, so a reinstalled
+  # LG Input Hook app won't load it a second time (every binding would then fire twice).
+  : > /tmp/inputhook
+) </dev/null >/dev/null 2>&1 &

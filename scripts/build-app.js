@@ -1,6 +1,6 @@
-// Builds an app into apps/<name>/build/ for packaging: a copy of app/ with shared/base.css put in
-// front of style.css, shared/webos.js in front of app.js, and shared/splash.png for appinfo.json's
-// splashBackground. Usage: node scripts/build-app.js apps/<name>
+// Builds an app into apps/<name>/build/ for packaging: a copy of app/ plus the shared files
+// (base.css, webos.js, ui.js and splash.png for appinfo.json's splashBackground). index.html loads the
+// shared files before the app's own. Usage: node scripts/build-app.js apps/<name>
 "use strict";
 
 const fs = require("fs");
@@ -9,13 +9,16 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const appDir = path.resolve(process.argv[2] || ".");
 const build = path.join(appDir, "build");
+const SHARED = ["base.css", "webos.js", "ui.js", "splash.png"];
 
+for (const file of SHARED) {
+  if (fs.existsSync(path.join(appDir, "app", file))) {
+    throw new Error("app/" + file + " would be replaced by shared/" + file + "; rename it");
+  }
+}
 fs.rmSync(build, { recursive: true, force: true });
 fs.cpSync(path.join(appDir, "app"), build, { recursive: true });
-for (const [file, shared] of [["style.css", "base.css"], ["app.js", "webos.js"]]) {
-  const target = path.join(build, file);
-  const merged = fs.readFileSync(path.join(root, "shared", shared), "utf8") + "\n" + fs.readFileSync(target, "utf8");
-  fs.writeFileSync(target, merged);
+for (const file of SHARED) {
+  fs.copyFileSync(path.join(root, "shared", file), path.join(build, file));
 }
-fs.copyFileSync(path.join(root, "shared", "splash.png"), path.join(build, "splash.png"));
 console.log("Built " + path.relative(root, build));

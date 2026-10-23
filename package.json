@@ -1,0 +1,8 @@
+{
+  "name": "webos-minimal-suite",
+  "private": true,
+  "description": "Apps for a rooted LG webOS TV",
+  "scripts": {
+    "test": "node --test \"shared/test/*.test.js\" \"apps/*/test/*.test.js\""
+  }
+}

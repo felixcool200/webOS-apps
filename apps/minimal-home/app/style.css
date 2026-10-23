@@ -159,3 +159,67 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 @media (min-width: 3000px) {
   .grid { grid-template-columns: repeat(9, minmax(0, 1fr)); }
 }
+
+/* Settings and Remote buttons: a header, panels of rows, and a footer with key hints and a status.
+   The padding matches .grid-view so the clock stays in place when switching views. */
+.panel-view {
+  --row-surface: rgba(255, 255, 255, 0.085);
+  width: 100%;
+  height: 100%;
+  padding: 4.2vh var(--page-x) 3vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-view > header {
+  flex: none;
+  height: 12vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.panel-view > footer {
+  flex: none;
+  height: 7vh;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.3vw;
+  color: var(--muted);
+  font-size: 1.25vh;
+}
+
+.panel-view footer b { color: var(--text); font-weight: 600; }
+.panel-view .status { margin-left: auto; }
+.panel-view .status.error { color: var(--error); }
+.panel-view .status.ok { color: var(--ok); }
+
+.panel-view .setting {
+  position: relative;
+  width: 100%;
+  display: grid;
+  align-items: center;
+  gap: 1vw;
+  text-align: left;
+  background: var(--row-surface);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.panel-view .setting .copy { min-width: 0; display: flex; flex-direction: column; gap: 0.45vh; }
+.panel-view .setting strong { font-size: 1.75vh; font-weight: 600; }
+.panel-view .setting small { overflow: hidden; color: var(--muted); font-size: 1.3vh; text-overflow: ellipsis; white-space: nowrap; }
+.panel-view .setting .value { color: var(--text); font-size: 1.55vh; white-space: nowrap; }
+
+/* A row or choice whose value Left/Right are changing. */
+.panel-view .is-editing .value {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 0.7vh rgba(114, 214, 255, 0.85);
+}
+
+.panel-view .focusable.is-focused {
+  outline: none;
+  background: rgba(255, 255, 255, 0.19);
+  box-shadow: inset 0 0 0 0.24vh var(--accent), 0 1vh 2.5vh rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}

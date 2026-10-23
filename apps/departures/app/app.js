@@ -2,7 +2,8 @@
   "use strict";
 
   // Trafiklab Realtime API: every departure in the next 60 minutes, with a `canceled` flag. It needs
-  // a key, which packaging writes to config.js from .env. Area ids come from /v1/stops/name/{name}.
+  // a key, which the build puts in front of app.js from .env (scripts/write-config.js). Area ids come
+  // from /v1/stops/name/{name}.
   var TRAFIKLAB_API = "https://realtime-api.trafiklab.se/v1/departures/";
   var TRAFIKLAB_KEY = (window.DEPARTURES_CONFIG && window.DEPARTURES_CONFIG.trafiklabKey) || "";
   // SL Transport API: no key, but at most three departures per line and direction. It is the
@@ -36,10 +37,10 @@
   // Short enough that the seconds never visibly skip; tick() only touches cells whose text changes.
   var TICK_MS = 250;
   var REQUEST_TIMEOUT_MS = 10000;
-  var GONE_STATES = { DEPARTED: true, PASSED: true, MISSED: true, ASSUMEDDEPARTED: true };
-  var STATE_LABELS = { CANCELLED: "Cancelled", INHIBITED: "No stop", REPLACED: "Replaced" };
 
   var KEY = WebOS.KEY;
+  var Logic = DeparturesLogic;
+  var clockText = Logic.clockText;
   function emptySource(name) {
     return { name: name, departures: [], updated: 0, error: null };
   }
@@ -76,18 +77,6 @@
     return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
   }
 
-  function parseWallClock(text) {
-    var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(text || "");
-    return match ? Date.UTC(+match[1], +match[2] - 1, +match[3], +match[4], +match[5], +match[6]) : NaN;
-  }
-
-  function pad(number) { return number < 10 ? "0" + number : String(number); }
-
-  function clockText(wallClock) {
-    var date = new Date(wallClock);
-    return pad(date.getUTCHours()) + ":" + pad(date.getUTCMinutes());
-  }
-
   function getJson(url) {
     return new Promise(function (resolve, reject) {
       var request = new XMLHttpRequest();
@@ -112,97 +101,23 @@
   }
 
   function setStatus(message, type) {
-    var box = document.getElementById("status");
-    box.textContent = message;
-    box.className = type || "";
+    UI.setStatus("status", message, type);
   }
 
-  // Stop deviations cover every mode at the site; keep the ones for this column's mode.
-  function relevantDeviations(list, mode) {
-    var seen = {};
-    return list.filter(function (deviation) {
-      var lines = deviation.scope && deviation.scope.lines;
-      var matches = !lines || !lines.length || lines.some(function (line) { return line.transport_mode === mode; });
-      if (!matches || !deviation.message || seen[deviation.message]) { return false; }
-      seen[deviation.message] = true;
-      return true;
-    });
-  }
-
-  // Both APIs are converted to the same entry shape. `label` replaces the countdown.
-  function fromSl(departure) {
-    // A cancelled trip is sometimes flagged only on the journey, with the departure still EXPECTED.
-    var cancelled = departure.journey && departure.journey.state === "CANCELLED";
-    return {
-      line: departure.line && departure.line.designation,
-      destination: departure.destination,
-      direction: departure.direction || departure.destination || "",
-      platform: "sl:" + (departure.stop_point && departure.stop_point.id),
-      label: STATE_LABELS[cancelled ? "CANCELLED" : departure.state] || "",
-      gone: !!GONE_STATES[departure.state],
-      at: parseWallClock(departure.expected || departure.scheduled)
-    };
-  }
-
-  function fromTrafiklab(departure) {
-    var route = departure.route || {};
-    var platform = departure.realtime_platform || departure.scheduled_platform || {};
-    return {
-      line: route.designation,
-      destination: (route.destination && route.destination.name) || route.direction,
-      direction: route.direction || "",
-      platform: "trafiklab:" + platform.designation,
-      label: departure.canceled ? STATE_LABELS.CANCELLED : "",
-      gone: false,
-      at: parseWallClock(departure.realtime || departure.scheduled)
-    };
-  }
-
-  function isTop(config, entry) {
-    if (config.topPlatforms) { return !!config.topPlatforms[entry.platform]; }
-    return config.topDirection.test(entry.direction);
-  }
-
-  // Trafiklab when it has recent departures and its last request worked (or SL's failed too), SL
-  // otherwise. Recent allows one missed Trafiklab refresh.
+  // Trafiklab's departures count as recent for two of its refreshes plus one of SL's, so one missed
+  // Trafiklab refresh doesn't switch to SL.
   function pick(stop) {
-    var trafiklab = stop.trafiklab;
-    var recent = trafiklab.departures.length && Date.now() - trafiklab.updated < trafiklabSeconds * 2000 + REFRESH_MS;
-    return recent && (!trafiklab.error || stop.sl.error) ? trafiklab : stop.sl;
+    return Logic.pick(stop, Date.now(), trafiklabSeconds * 2000 + REFRESH_MS);
   }
 
-  function upcoming(source, now) {
-    return source.departures.filter(function (entry) {
-      return !entry.gone && !isNaN(entry.at) && entry.at - now > -60000;
-    }).sort(function (left, right) { return left.at - right.at; });
-  }
-
-  // Seconds show only for the next ten minutes, as small text after the minutes.
   function fillTime(cell, at, now) {
-    var seconds = Math.floor((at - now) / 1000);
-    var text, textClass = "", small = "", smallClass = "";
-    if (seconds <= 0) {
-      text = "Now";
-    } else if (seconds < 60) {
-      text = String(seconds);
-      textClass = "count";
-      small = "s";
-    } else if (seconds < 600) {
-      text = String(Math.floor(seconds / 60));
-      small = ":" + pad(seconds % 60);
-      smallClass = "seconds";
-    } else if (seconds < 3600) {
-      text = String(Math.floor(seconds / 60));
-      small = "min";
-    } else {
-      text = clockText(at);
-    }
-    if (cell.shown === text + small) { return; }
-    cell.shown = text + small;
+    var parts = Logic.countdown(at, now);
+    if (cell.shown === parts.text + parts.small) { return; }
+    cell.shown = parts.text + parts.small;
     cell.textContent = "";
-    cell.appendChild(element("span", textClass, text));
-    if (small) { cell.appendChild(element("small", smallClass, small)); }
-    cell.classList.toggle("is-now", seconds < 60);
+    cell.appendChild(element("span", parts.textClass, parts.text));
+    if (parts.small) { cell.appendChild(element("small", parts.smallClass, parts.small)); }
+    cell.classList.toggle("is-now", parts.soon);
   }
 
   function timeCell(entry, now) {
@@ -251,14 +166,14 @@
     var lists = card.querySelectorAll(".departures");
     var notice = card.querySelector(".notice");
     var source = pick(stop);
-    var entries = upcoming(source, now);
+    var entries = Logic.upcoming(source, now);
 
     notice.textContent = stop.deviations.map(function (deviation) { return deviation.message; }).join("  ·  ");
     notice.classList.toggle("is-hidden", !stop.deviations.length);
 
     if (stop.config.split) {
-      renderList(lists[0], entries.filter(function (entry) { return isTop(stop.config, entry); }), source, now);
-      renderList(lists[1], entries.filter(function (entry) { return !isTop(stop.config, entry); }), source, now);
+      renderList(lists[0], entries.filter(function (entry) { return Logic.isTop(stop.config, entry); }), source, now);
+      renderList(lists[1], entries.filter(function (entry) { return !Logic.isTop(stop.config, entry); }), source, now);
     } else {
       renderList(lists[0], entries, source, now);
     }
@@ -306,8 +221,8 @@
   function loadSl(stop) {
     var url = SL_API + stop.config.id + "/departures?transport=" + stop.config.mode + "&forecast=" + FORECAST_MINUTES;
     return getJson(url).then(function (data) {
-      stop.deviations = relevantDeviations(data.stop_deviations || [], stop.config.mode);
-      accept(stop.sl, (data.departures || []).map(fromSl));
+      stop.deviations = Logic.relevantDeviations(data.stop_deviations || [], stop.config.mode);
+      accept(stop.sl, (data.departures || []).map(Logic.fromSl));
     }).catch(function (error) { fail(stop, stop.sl, error); });
   }
 
@@ -316,7 +231,7 @@
     return getJson(url).then(function (data) {
       accept(stop.trafiklab, (data.departures || []).filter(function (departure) {
         return departure.route && departure.route.transport_mode === stop.config.mode;
-      }).map(fromTrafiklab));
+      }).map(Logic.fromTrafiklab));
     }).catch(function (error) { fail(stop, stop.trafiklab, error); });
   }
 
