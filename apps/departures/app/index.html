@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Departures</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Departures</h1>
+        <p>Live from SL</p>
+      </div>
+      <div id="clock" aria-live="off">--:--</div>
+    </header>
+
+    <div id="stops" class="columns"></div>
+
+    <footer>
+      <span><b>OK</b> Refresh</span>
+      <span><b>Back</b> Close</span>
+      <span id="status" aria-live="polite">Loading departures…</span>
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
