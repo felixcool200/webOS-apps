@@ -1,6 +1,6 @@
 # Plan: Minimal Home's Settings covering LG's Settings
 
-Status: all phases are built, in Minimal Home 0.3.52: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages, with Phase 7's rows. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
+Status: all phases are built, in Minimal Home 0.3.52: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages, with Phase 7's rows. The TV runs 0.3.51 (everything but Phase 7's rows); installing 0.3.52 and checking its rows on the TV waits for the user. Apply to all inputs (it overwrites other inputs' settings) and Extend pressing time (it needs the remote held) need the user's OK and hands. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
 
 ## Decisions and checks (2026-10-24)
 
