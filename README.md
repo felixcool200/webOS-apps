@@ -165,6 +165,19 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS '/home/root/restore-stock-home.sh'
 
 The recovery script removes the boot hook, unmounts the redirect, restores `com.webos.app.home` as the default Home app, and restarts the webOS application manager.
 
+### Keeping Minimal Home open
+
+LG's memory manager (`memchute`) closes the app you leave whenever another app starts, unless it is in its `KeepOnLaunchEx` list, where LG's own Home is; this happens with plenty of memory free. The window manager then starts the closed app again in the background (`"mode":"autoReload"` in `/var/log/messages`), and when that overlaps the new app's start, the new app's splash can stay on screen until the next launch, for up to 2 minutes. Back to Home also always meant a cold start.
+
+Minimal Home was added to that list on 2026-10-24 with LG's config service, which keeps it as a user override in `/var/preferences/configd_factory_db.json`. `memchute` reads the list when it starts, so it takes effect after a reboot:
+
+```sh
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS "exec </dev/null; luna-send -n 1 luna://com.webos.service.config/setConfigs \
+  '{\"configs\":{\"com.webos.memorymanager.KeepOnLaunchEx\":[\"com.webos.app.home\",\"com.webos.app.seniorhome\",\"google.assistant\",\"amazon.alexapr\",\"com.webos.app.familycare\",\"org.webosbrew.minimalhome\"]}}'"
+```
+
+To undo it, run the same command without `org.webosbrew.minimalhome` and reboot. `luna://com.webos.memorymanager/getConfigs` shows the list `memchute` is using.
+
 ### Screensaver watchdog
 
 Twice (on 2026-10-23 and 2026-10-24) LG's power service, tvpowerd, started the screensaver and then waited for it forever: `luna://com.webos.service.tvpower/power/getPowerState` kept reporting `"processing": "Screen Saver Ready"` instead of switching to `"state": "Screen Saver"`, and every key, power included, was ignored until a reboot. The second time it happened three minutes after a Minimal Home deploy had restarted the app manager, which is the likely trigger.
