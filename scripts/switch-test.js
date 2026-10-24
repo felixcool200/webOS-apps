@@ -1,7 +1,8 @@
 // Switches between two apps (Departures and Minimal Home unless given) on the TV in .env, the way Home
 // opens an app (a Luna launch as root), and reports per switch what the window manager did: whether the
 // app left was restarted in the background (mode autoReload), how long a splash was shown, whether one
-// was still on screen WAIT seconds later (stuck), and how long the app took to show. With --cold the
+// was still on screen WAIT seconds later although the app had shown its window (stuck; "slow" when the
+// app hadn't shown it yet), and how long the app took to show. With --cold the
 // second app is closed before each switch to it, so it starts cold while the window manager closes and
 // restarts the first: with Departures and Minimal Home that leaves a splash on screen most times.
 // Usage: node scripts/switch-test.js [--cold] [switches each way, default 5] [wait in seconds, default 4]
@@ -98,11 +99,16 @@ function main() {
     const splashOn = during.find((event) => event.kind === "NL_VSC" && event.data.app_id === SPLASH && event.data.visible);
     const splashOff = splashOn && during.find((event) => event.at >= splashOn.at && event.kind === "NL_VSC" && event.data.app_id === SPLASH && !event.data.visible);
     const shown = during.find((event) => event.kind === "NL_VSC" && event.data.app_id === check.app && event.data.visible);
+    // The window list is read WAIT seconds after the launch; a splash then is only stuck if the app had
+    // shown its window by then.
+    const shownInTime = shown && shown.at < launch.at + wait * 1000;
+    const splashUp = check.shown.includes(SPLASH);
     return {
       check,
       restarted,
       splash: splashOn ? (splashOff ? (splashOff.at - splashOn.at) + " ms" : "never hidden") : "none",
-      stuck: check.shown.includes(SPLASH),
+      stuck: splashUp && shownInTime,
+      slow: !shownInTime,
       shownAfter: shown ? (shown.at - launch.at) + " ms" : "not shown"
     };
   });
@@ -111,12 +117,13 @@ function main() {
   for (const row of rows) {
     const to = row.check.app.replace(/^org\.webosbrew\./, "").padEnd(25);
     if (row.error) { console.log(`  ${row.check.cycle}  ${to} ${row.error}`); continue; }
-    console.log(`  ${row.check.cycle}  ${to} ${(row.restarted.join(", ") || "-").padEnd(30)} ${row.splash.padEnd(15)} ${row.shownAfter.padEnd(13)} ${row.stuck ? "STUCK" : "-"}`);
+    console.log(`  ${row.check.cycle}  ${to} ${(row.restarted.join(", ") || "-").padEnd(30)} ${row.splash.padEnd(15)} ${row.shownAfter.padEnd(13)} ${row.stuck ? "STUCK" : row.slow ? "slow" : "-"}`);
   }
   const counted = rows.filter((row) => !row.error);
   const stuck = counted.filter((row) => row.stuck);
   const withRestart = counted.filter((row) => row.restarted.some((id) => Object.values(APPS).includes(id)));
-  console.log(`\n  ${stuck.length} of ${counted.length} switches left a splash on screen; ` +
+  const slow = counted.filter((row) => row.slow);
+  console.log(`\n  ${stuck.length} of ${counted.length} switches left a splash on screen after the app showed (${slow.length} apps too slow to tell); ` +
     `${withRestart.length} had one of our apps restarted in the background, ` +
     `${stuck.filter((row) => withRestart.includes(row)).length} of the stuck ones among them.`);
 }
