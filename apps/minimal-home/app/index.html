@@ -150,33 +150,37 @@
       <section>
         <h2>Quick</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="pictureMode" data-nav-right="pictureLink" type="button">
+          <button class="setting choice-setting focusable" data-setting="pictureMode" type="button">
             <span class="copy"><strong>Picture mode</strong><small>Input that played last</small></span>
             <span class="value">Loading…</span>
           </button>
-          <button class="setting focusable" data-setting="backlight" data-nav-right="quickStartMode" type="button">
+          <button class="setting focusable" data-setting="backlight" type="button">
             <span class="copy"><strong>Panel brightness</strong><small>Light output</small></span>
             <span class="range"><i></i></span><span class="value">—</span>
           </button>
-          <button class="setting choice-setting focusable" data-setting="energySaving" data-nav-right="wifiEnabled" type="button">
+          <button class="setting choice-setting focusable" data-setting="energySaving" type="button">
             <span class="copy"><strong>Energy saving</strong><small>Automatic panel dimming</small></span>
             <span class="value">Loading…</span>
           </button>
-          <button class="setting choice-setting focusable" data-setting="soundMode" data-nav-right="wifiEnabled" type="button">
+          <button class="setting choice-setting focusable" data-setting="soundMode" type="button">
             <span class="copy"><strong>Sound mode</strong><small>Applies to the current output</small></span>
+            <span class="value">Loading…</span>
+          </button>
+          <button class="setting choice-setting focusable" data-setting="sleepTimer" type="button">
+            <span class="copy"><strong>Sleep timer</strong><small>Turns the TV off after a while</small></span>
             <span class="value">Loading…</span>
           </button>
         </div>
 
         <h2 class="section-gap">Minimal Home</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" id="remoteButtons" data-view="remote" data-nav-right="advanced" type="button">
-            <span class="copy"><strong>Remote buttons</strong><small>Disable or reassign remote buttons</small></span>
-            <span class="value">—</span>
+          <button class="setting choice-setting link-row focusable" id="remoteButtons" data-view="remote" type="button">
+            <span class="copy"><strong>Remote buttons</strong></span>
+            <span class="value"></span>
           </button>
-          <button class="setting choice-setting focusable" id="appearanceLink" data-view="appearance" data-nav-right="advanced" type="button">
-            <span class="copy"><strong>Appearance</strong><small>Colour theme of Home and the other apps</small></span>
-            <span class="value">—</span>
+          <button class="setting choice-setting link-row focusable" id="appearanceLink" data-view="appearance" type="button">
+            <span class="copy"><strong>Appearance</strong></span>
+            <span class="value"></span>
           </button>
         </div>
       </section>
@@ -184,31 +188,39 @@
       <section>
         <h2>All settings</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" id="pictureLink" data-view="picture" data-nav-left="pictureMode" type="button">
-            <span class="copy"><strong>Picture</strong><small>Brightness, colour, clarity, per input</small></span>
-            <span class="value">—</span>
+          <button class="setting choice-setting link-row focusable" id="pictureLink" data-view="picture" type="button">
+            <span class="copy"><strong>Picture</strong></span>
+            <span class="value"></span>
           </button>
-        </div>
-
-        <h2 class="section-gap">System and network</h2>
-        <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="quickStartMode" data-nav-left="backlight" type="button">
-            <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
-            <span class="value">Loading…</span>
+          <button class="setting choice-setting link-row focusable" id="soundLink" data-view="sound" type="button">
+            <span class="copy"><strong>Sound</strong></span>
+            <span class="value"></span>
           </button>
-          <button class="setting choice-setting focusable" data-setting="wifiEnabled" data-nav-left="energySaving" type="button">
-            <span class="copy"><strong>Wi-Fi</strong><small id="wifi-detail">Reading network status…</small></span>
-            <span class="value">Loading…</span>
+          <button class="setting choice-setting link-row focusable" id="networkLink" data-view="network" type="button">
+            <span class="copy"><strong>Network</strong></span>
+            <span class="value"></span>
           </button>
-          <div class="setting status-setting">
-            <span class="copy"><strong>Ethernet</strong><small id="ethernet-detail">Reading network status…</small></span>
-            <span id="ethernet-value" class="value">Loading…</span>
-          </div>
+          <button class="setting choice-setting link-row focusable" id="powerLink" data-view="power" type="button">
+            <span class="copy"><strong>Power and energy</strong></span>
+            <span class="value"></span>
+          </button>
+          <button class="setting choice-setting link-row focusable" id="generalLink" data-view="general" type="button">
+            <span class="copy"><strong>General</strong></span>
+            <span class="value"></span>
+          </button>
+          <button class="setting choice-setting link-row focusable" id="accessibilityLink" data-view="accessibility" type="button">
+            <span class="copy"><strong>Accessibility</strong></span>
+            <span class="value"></span>
+          </button>
+          <button class="setting choice-setting link-row focusable" id="aboutLink" data-view="about" type="button">
+            <span class="copy"><strong>About this TV</strong></span>
+            <span class="value"></span>
+          </button>
         </div>
 
         <div class="info-card">
           <strong>More settings</strong>
-          <p>Bluetooth, inputs, accessibility, updates and detailed network setup remain in LG Settings.</p>
+          <p>Bluetooth, channels, locks, timers and updates stay in LG Settings.</p>
           <button id="advanced" class="action focusable" data-nav-left="appearanceLink" type="button">Open LG Settings</button>
         </div>
       </section>
@@ -222,20 +234,6 @@
     </footer>
   </main>
 
-  <!-- A Settings page: settings-page.js makes its list and card on the first open. -->
-  <main id="picture-view" class="panel-view settings-page" hidden>
-    <header>
-      <div class="time"><span class="clock"></span><span class="date"></span></div>
-      <p class="view-name">Picture</p>
-    </header>
-    <div class="page-body"></div>
-    <footer>
-      <span class="move-hint"><b>Arrows</b> Move</span>
-      <span class="select-hint"><b>OK</b> Select</span>
-      <span class="back-hint"><b>Back</b> Settings</span>
-      <span id="picture-status" class="status"></span>
-    </footer>
-  </main>
   <script src="webos.js"></script>
   <script src="ui.js"></script>
   <script src="home-logic.js"></script>

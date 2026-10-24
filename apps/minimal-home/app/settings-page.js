@@ -1,6 +1,6 @@
 // A Settings page inside Minimal Home, such as Picture: a scrolling list of the page's rows from
 // SettingsSpecs, and a card beside it about the focused row. SettingsPage.create(id) makes the module
-// that app.js runs as the view `id` (<main id="ID-view">, an empty shell in index.html). A page reads
+// that app.js runs as the view `id` (<main id="ID-view">, which it adds to the page). A page reads
 // its rows in one root call each time it opens, never at Home's start, and writes a change at once;
 // while one is written, the last value asked for waits, so holding Left or Right keeps changing it.
 // A picture page also chooses the input it applies to ("Applies to"), since the TV keeps picture
@@ -10,9 +10,13 @@ var SettingsPage = (function () {
 
   var KEY = WebOS.KEY;
   var SETTINGS = "luna://com.webos.settingsservice/";
+  var LAUNCH = "luna://com.webos.service.applicationManager/launch";
   var APPLIES_TO = "appliesTo";
   var APPLIES_TO_HELP = "The TV keeps picture settings for each input: the apps, live TV and each HDMI input. " +
     "The page starts on the one that played last.";
+  // A source row written by another service is read again this long after a write, as Wi-Fi takes a
+  // moment to turn on or off.
+  var SOURCE_REREAD_MS = 1200;
 
   function element(tag, className, text) {
     var node = document.createElement(tag);
@@ -47,6 +51,8 @@ var SettingsPage = (function () {
     // Values asked for and not written yet, by key, and the key being written.
     var pending = {};
     var writing = null;
+    // A value that asks first (row.confirm), shown until OK writes it or anything else drops it.
+    var proposed = null;
 
     function setStatus(message, type) {
       UI.setStatus(id + "-status", message, type);
@@ -60,9 +66,11 @@ var SettingsPage = (function () {
       return list.querySelector('[data-key="' + key + '"]');
     }
 
-    // The state as shown: with the values waiting to be written.
+    // The state as shown: with the values waiting to be written, and one waiting for OK.
     function shown() {
-      return { values: Object.assign({}, state.values, pending), descs: state.descs, context: state.context };
+      var values = Object.assign({}, state.values, pending);
+      if (proposed) { values[proposed.key] = proposed.value; }
+      return { values: values, descs: state.descs, notes: state.notes, context: state.context };
     }
 
     function inputName(input) {
@@ -70,7 +78,7 @@ var SettingsPage = (function () {
     }
 
     function makeRow(key, label, kind) {
-      var button = element("button", "setting focusable" + (kind === "range" ? "" : " choice-setting"));
+      var button = element("button", "setting focusable" + (kind === "range" ? "" : " choice-setting") + (kind === "link" ? " link-setting" : ""));
       button.type = "button";
       button.setAttribute("data-key", key);
       var copy = element("span", "copy");
@@ -84,7 +92,7 @@ var SettingsPage = (function () {
       }
       button.appendChild(element("span", "value", "—"));
       button.addEventListener("click", function () {
-        if (editing === button) { stopEditing(); } else { startEditing(button); }
+        if (editing === button) { confirmOrStop(); } else { activate(button); }
       });
       return button;
     }
@@ -102,7 +110,7 @@ var SettingsPage = (function () {
         section.rows.forEach(function (row) {
           var node = makeRow(row.key, row.label, row.kind);
           node.setAttribute("data-section", String(index));
-          node.hidden = true;
+          node.hidden = row.kind !== "link";
           list.appendChild(node);
         });
       });
@@ -116,6 +124,8 @@ var SettingsPage = (function () {
       card.appendChild(lgButton);
       body.appendChild(list);
       body.appendChild(card);
+      // The first row, although hidden until the values are read; renderAll then moves the focus to
+      // the first row shown.
       setFocus(list.querySelector(".setting"));
     }
 
@@ -140,8 +150,9 @@ var SettingsPage = (function () {
       if (info.hidden) { return; }
       node.classList.toggle("is-greyed", info.greyed);
       node.classList.toggle("is-busy", writing === row.key);
+      node.classList.toggle("is-proposed", !!proposed && proposed.key === row.key);
       node.querySelector(".value").textContent = info.text;
-      node.querySelector("small").textContent = page.context && !info.perInput ? "Every input" : "";
+      node.querySelector("small").textContent = info.note || (page.context && !info.perInput && row.kind !== "link" ? "Every input" : "");
       if (row.kind === "range") { node.querySelector(".range").style.setProperty("--fill", info.fill + "%"); }
       renderDirections(node, row, info);
     }
@@ -178,9 +189,10 @@ var SettingsPage = (function () {
         text.help = APPLIES_TO_HELP;
       } else if (row) {
         var info = SettingsLogic.rowView(row, shown());
+        var scope = SettingsLogic.scopeText(row, info, state, page, inputs, modeLabels);
         text.title = row.label;
         text.help = row.help || "";
-        text.scope = page.context ? SettingsLogic.scopeText(row, info, state, inputs, modeLabels) + "." : "";
+        text.scope = scope ? scope + "." : "";
         text.reason = info.greyed ? info.reason + "." : "";
       }
       Object.keys(text).forEach(function (name) { card.querySelector(".card-" + name).textContent = text[name]; });
@@ -229,18 +241,31 @@ var SettingsPage = (function () {
       setStatus((prefix ? prefix + " · " : "") + "Editing " + editing.querySelector("strong").textContent + " — Left/Right changes", prefix ? "ok" : "");
     }
 
-    function startEditing(node) {
+    function launch(target, what) {
+      WebOS.rootLuna(LAUNCH, target).catch(function (error) { setStatus("Could not open " + what + ": " + error.message, "error"); });
+    }
+
+    // OK on a row: a link opens, an info row says where it can be changed, and the others start
+    // changing (unless greyed out, or another input's settings are still being read).
+    function activate(node) {
       if (!node || node === lgButton) { return; }
       setFocus(node);
       var key = node.getAttribute("data-key");
+      var row = rowFor(key);
       if (key === APPLIES_TO) {
         if (!inputs) { return; }
+      } else if (row.kind === "link") {
+        launch(row.launch, row.label);
+        return;
+      } else if (row.kind === "info") {
+        setStatus(row.label + " is shown here; change it in LG Settings");
+        return;
       } else {
         if (switching) {
           setStatus("Reading " + inputName(state.context.input) + "…");
           return;
         }
-        var info = SettingsLogic.rowView(rowFor(key), shown());
+        var info = SettingsLogic.rowView(row, shown());
         if (info.greyed) {
           setStatus(info.reason, "error");
           return;
@@ -256,11 +281,25 @@ var SettingsPage = (function () {
 
     function stopEditing(showReady) {
       if (!editing) { return; }
+      proposed = null;
       editing.classList.remove("is-editing");
       editing = null;
       updateHints(false);
       renderAll();
       if (showReady !== false) { setStatus("Ready", "ok"); }
+    }
+
+    // OK while changing a value: writes a value that asked first, else stops changing.
+    function confirmOrStop() {
+      if (proposed) {
+        pending[proposed.key] = proposed.value;
+        touched[proposed.key] = true;
+        proposed = null;
+        stopEditing(false);
+        flush();
+        return;
+      }
+      stopEditing();
     }
 
     function change(direction) {
@@ -277,9 +316,17 @@ var SettingsPage = (function () {
       if (info.greyed) { return; }
       var value = SettingsLogic.nextRowValue(row, info, direction);
       if (value === undefined || value === info.value) { return; }
-      pending[key] = value;
+      if (SettingsLogic.needsConfirm(row, value)) {
+        proposed = { key: key, value: value };
+        renderAll();
+        setStatus(row.confirm.prompt, "error");
+        return;
+      }
+      proposed = null;
+      if (value === state.values[key] && !writing) { delete pending[key]; } else { pending[key] = value; }
       touched[key] = true;
       renderAll();
+      editingStatus();
       flush();
     }
 
@@ -290,8 +337,15 @@ var SettingsPage = (function () {
       if (key === undefined) { return; }
       var row = rowFor(key);
       var value = pending[key];
-      var operations = SettingsLogic.writeOperations(row, value, state);
-      if (!operations) {
+      var call;
+      var operations = null;
+      if (row.source) {
+        call = SettingsLogic.sourceWrite(row, value);
+      } else {
+        operations = SettingsLogic.writeOperations(row, value, state, page);
+        call = operations && [SETTINGS + "batch", { operations: operations }];
+      }
+      if (!call) {
         delete pending[key];
         setStatus("Could not change " + row.label + ": its input isn't known yet", "error");
         renderAll();
@@ -300,12 +354,18 @@ var SettingsPage = (function () {
       writing = key;
       renderAll();
       setStatus("Changing " + row.label + "…");
-      WebOS.rootLuna(SETTINGS + "batch", { operations: operations }).then(function (reply) {
-        state = SettingsLogic.applyWrite(state, row, value, operations, reply.results);
+      WebOS.rootLuna(call[0], call[1]).then(function (reply) {
+        if (operations) {
+          state = SettingsLogic.applyWrite(state, row, value, operations, reply.results);
+        } else {
+          state.values[key] = value;
+        }
         if (pending[key] === value) { delete pending[key]; }
         if (editing) { editingStatus("Saved"); } else { setStatus("Saved", "ok"); }
-        // A new picture mode or energy saving step changes what the other rows show.
+        // A new picture mode, energy saving step or sound mode changes what the other rows show, and
+        // a source (the sleep timer's time left, Wi-Fi's connection) says what became of the change.
         if (row.reread) { refresh(); }
+        if (row.source) { window.setTimeout(refresh, SOURCE_REREAD_MS); }
       }).catch(function (error) {
         delete pending[key];
         setStatus("Could not change " + row.label + ": " + error.message, "error");
@@ -316,7 +376,7 @@ var SettingsPage = (function () {
       });
     }
 
-    // Reads the page's values in its context; null when another read took over meanwhile.
+    // Reads the page's settingsservice values in its context; null when another read took over.
     function readOnce(run, needing) {
       var operations = SettingsLogic.contextReads(rows, page, state, needing);
       if (!operations.length) { return Promise.resolve({ read: [], failed: null }); }
@@ -328,15 +388,57 @@ var SettingsPage = (function () {
       });
     }
 
-    // Reads the values again, as after a new picture mode.
+    // Reads the page in one root call: its settingsservice values (in the context the TV is in, with
+    // the descriptions when `withDescs`) and its rows from other services. Returns the failure, if any.
+    function readAll(run, withDescs) {
+      var operations = SettingsLogic.currentReads(rows, page, withDescs);
+      var sources = SettingsLogic.sourceCalls(rows);
+      var calls = operations.length ? [[SETTINGS + "batch", { operations: operations }]] : [];
+      calls = calls.concat(sources);
+      if (page.context && withDescs) { calls.push(["luna://com.webos.service.eim/getAllInputStatus", {}]); }
+      return WebOS.rootLunaBatch(calls).then(function (results) {
+        if (run !== loadRun) { return null; }
+        var failed = null;
+        if (operations.length) {
+          if (results[0] instanceof Error) { throw results[0]; }
+          var applied = SettingsLogic.applyReads(state, rows, operations, results[0].results || [], touched);
+          state = applied.state;
+          failed = applied.failed;
+          if (withDescs) {
+            current = applied.dimension;
+            state.context = Object.assign({}, current);
+          }
+        }
+        var fromSources = SettingsLogic.applySources(state, rows, results.slice(operations.length ? 1 : 0), touched);
+        state = fromSources.state;
+        failed = failed || fromSources.failed;
+        if (page.context && withDescs) {
+          var inputStatus = results[results.length - 1];
+          inputs = SettingsLogic.inputChoices(inputStatus instanceof Error ? null : inputStatus, current.input, SettingsSpecs.INPUTS);
+        }
+        return { failed: failed };
+      });
+    }
+
+    function showRead(result) {
+      if (!result) { return; }
+      renderAll();
+      if (result.failed) { setStatus("Could not read some settings: " + result.failed.message, "error"); }
+      else if (editing) { editingStatus(); }
+      else { setStatus("Ready", "ok"); }
+    }
+
+    // Reads the values again, as after a new picture mode: on a page with "Applies to" in its
+    // context, elsewhere as the TV is now.
     function refresh() {
       var run = loadRun += 1;
       touched = {};
       if (writing) { touched[writing] = true; }
-      readOnce(run, null).then(function (applied) {
-        if (!applied) { return; }
+      var read = page.context ? readOnce(run, null) : readAll(run, false);
+      read.then(function (result) {
+        if (!result) { return; }
         renderAll();
-        if (applied.failed) { setStatus("Could not read some settings: " + applied.failed.message, "error"); }
+        if (result.failed) { setStatus("Could not read some settings: " + result.failed.message, "error"); }
       }).catch(function (error) { setStatus("Could not read settings: " + error.message, "error"); });
     }
 
@@ -352,7 +454,7 @@ var SettingsPage = (function () {
       var known = Object.keys(SettingsLogic.contextFor(input, current));
       switching = true;
       touched = {};
-      state = { values: state.values, descs: state.descs, context: SettingsLogic.contextFor(input, current) };
+      state = Object.assign({}, state, { context: SettingsLogic.contextFor(input, current) });
       renderAll();
       setStatus("Reading " + inputName(input) + "…");
       readOnce(run, null).then(function (first) {
@@ -376,38 +478,24 @@ var SettingsPage = (function () {
       });
     }
 
-    // Reads the page in the context the TV is in now, and the inputs "Applies to" offers.
+    // Reads the page as the TV is now, and the inputs "Applies to" offers.
     function load() {
       var run = loadRun += 1;
       switching = false;
       touched = {};
       if (writing) { touched[writing] = true; }
       if (!loaded) { setStatus("Reading current settings…"); }
-      var operations = SettingsLogic.currentReads(rows, page);
-      var calls = [[SETTINGS + "batch", { operations: operations }]];
-      if (page.context) { calls.push(["luna://com.webos.service.eim/getAllInputStatus", {}]); }
-      return WebOS.rootLunaBatch(calls).then(function (results) {
-        if (run !== loadRun) { return; }
-        if (results[0] instanceof Error) { throw results[0]; }
-        var applied = SettingsLogic.applyReads(state, rows, operations, results[0].results || [], touched);
-        current = applied.dimension;
-        state = { values: applied.state.values, descs: applied.state.descs, context: Object.assign({}, current) };
-        if (page.context) {
-          inputs = SettingsLogic.inputChoices(results[1] instanceof Error ? null : results[1], current.input, SettingsSpecs.INPUTS);
-        }
+      return readAll(run, true).then(function (result) {
+        if (!result) { return; }
         loaded = true;
-        renderAll();
-        if (applied.failed) { setStatus("Could not read some settings: " + applied.failed.message, "error"); }
-        else if (editing) { editingStatus(); }
-        else { setStatus("Ready", "ok"); }
+        showRead(result);
       }).catch(function (error) {
         setStatus("Could not read settings: " + error.message, "error");
       });
     }
 
     function openLg() {
-      WebOS.rootLuna("luna://com.webos.service.applicationManager/launch", { id: "com.palm.app.settings", params: { target: page.lg } })
-        .catch(function (error) { setStatus("Could not open LG Settings: " + error.message, "error"); });
+      launch(typeof page.lg === "string" ? { id: "com.palm.app.settings", params: { target: page.lg } } : page.lg, "LG Settings");
     }
 
     // Returns "leave" when Back should take the user back to Settings.
@@ -437,9 +525,9 @@ var SettingsPage = (function () {
       } else if (code === KEY.ENTER) {
         event.preventDefault();
         if (event.repeat) { return null; }
-        if (editing) { stopEditing(); }
+        if (editing) { confirmOrStop(); }
         else if (selected === lgButton) { openLg(); }
-        else { startEditing(selected); }
+        else { activate(selected); }
       }
       return null;
     }
@@ -453,8 +541,18 @@ var SettingsPage = (function () {
       setFocus(node, false);
     }
 
+    // Adds the view's <main> at Home's start, hidden, with a header and footer like the views in
+    // index.html (the clock in it is kept by Home); its list and card are made on the first open.
     function attach() {
-      view = document.getElementById(id + "-view");
+      view = element("main", "panel-view settings-page");
+      view.id = id + "-view";
+      view.hidden = true;
+      view.innerHTML = '<header><div class="time"><span class="clock"></span><span class="date"></span></div><p class="view-name"></p></header>' +
+        '<div class="page-body"></div><footer><span class="move-hint"></span><span class="select-hint"></span>' +
+        '<span class="back-hint"></span><span class="status" id="' + id + '-status"></span></footer>';
+      view.querySelector(".view-name").textContent = page.title;
+      document.body.insertBefore(view, document.body.querySelector("script"));
+      updateHints(false);
     }
 
     function open() {

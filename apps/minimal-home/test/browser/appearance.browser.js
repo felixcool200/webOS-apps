@@ -17,7 +17,7 @@ function accent() {
 BrowserTest.define("the next theme shows at once and reaches the other apps once the changes stop", {}, async (t) => {
   await t.homeReady();
   openSettings();
-  for (let i = 0; i < 5; i += 1) { t.key("DOWN"); }
+  for (let i = 0; i < 6; i += 1) { t.key("DOWN"); }
   t.key("OK");
   t.equal(t.view(), "appearance");
   t.equal(t.focused().id, "appearance-theme");
@@ -87,7 +87,7 @@ BrowserTest.define("every Settings row fits above the footer and the Appearance 
   t.$$("#settings-view .setting, #settings-view .info-card").forEach((row) => {
     t.ok(row.getBoundingClientRect().bottom <= footer, (row.id || row.getAttribute("data-setting") || "the card") + " ends above the footer");
   });
-  for (let i = 0; i < 5; i += 1) { t.key("DOWN"); }
+  for (let i = 0; i < 6; i += 1) { t.key("DOWN"); }
   t.equal(t.focused().id, "appearanceLink", "Down from Picture mode");
   t.key("RIGHT");
   t.equal(t.focused().id, "advanced");

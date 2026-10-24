@@ -75,6 +75,9 @@
 }
 
 #settings-view .focusable.is-busy { opacity: 0.65; }
+/* Rows that lead to another view are one line, so the hub fits without scrolling. */
+#settings-view .setting.link-row { min-height: 6.4vh; padding: 1vh 1.4vw; }
+#settings-view .setting.link-row .value::after { content: "  ›"; color: var(--muted); }
 /* Greyed out: another setting decides it (the status line says why on OK). */
 #settings-view .setting.is-greyed > * { opacity: 0.45; }
 
@@ -115,6 +118,9 @@
 .settings-page .setting.choice-setting .value { grid-column: 2 / 4; }
 .settings-page .setting.is-editing .value.can-decrease::before { content: "‹  "; }
 .settings-page .setting.is-editing .value.can-increase::after { content: "  ›"; }
+.settings-page .setting.link-setting .value { color: var(--muted); }
+/* A value waiting for OK, such as Wi-Fi Off. */
+.settings-page .setting.is-proposed .value { color: var(--error); text-shadow: none; }
 /* Greyed out: the TV doesn't offer it now, or another setting decides it (the card says why). */
 .settings-page .setting.is-greyed > * { opacity: 0.45; }
 /* Another input's settings are being read. */

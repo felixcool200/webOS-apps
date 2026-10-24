@@ -27,15 +27,15 @@ test("stepping a setting stays within its range or list", () => {
 
 const SPECS = {
   pictureMode: { category: "picture", kind: "choice" }, backlight: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
-  energySaving: { category: "picture", kind: "choice" }, soundMode: { category: "sound", kind: "choice" },
-  quickStartMode: { category: "option", kind: "choice", order: ["off", "on"] }, wifiEnabled: { category: "network", kind: "choice" }
+  energySaving: { category: "picture", kind: "choice", order: ["auto", "off"] }, soundMode: { category: "sound", kind: "choice" },
+  sleepTimer: { category: "timer", kind: "choice" }
 };
-const CHOICES = ["pictureMode", "energySaving", "soundMode", "quickStartMode"];
+const CHOICES = ["pictureMode", "energySaving", "soundMode"];
 const values = (...list) => ({ values: { arrayExt: list.map((value) => ({ value })) } });
 const replies = () => [
   { settings: { pictureMode: "normal", backlight: "100", energySaving: "auto" } }, { settings: { soundMode: "standard" } },
-  { settings: { quickStartMode: "on" } }, values("normal", "vivid"), values("auto", "off"), values("standard", "movie"), values("on", "off"),
-  { wifi: { state: "connected" } }, { status: "connectionStateChanged" }
+  values("normal", "vivid"), values("off", "auto"), values("standard", "movie"),
+  { wifi: { state: "connected" } }, { status: "connectionStateChanged" }, { sleepTimeSecond: 0 }
 ];
 
 test("a load fills in values and the choices on offer, with ranges as numbers", () => {
@@ -43,13 +43,14 @@ test("a load fills in values and the choices on offer, with ranges as numbers", 
   assert.strictEqual(failed, null);
   assert.strictEqual(state.backlight.value, 100, "the TV reports \"100\"; it must compare equal to 100");
   assert.deepStrictEqual(state.pictureMode.values, ["normal", "vivid"]);
-  assert.deepStrictEqual(state.quickStartMode.values, ["off", "on"]);
+  assert.deepStrictEqual(state.energySaving.values, ["auto", "off"], "in the spec's order");
+  assert.strictEqual(state.sleepTimer.value, "off");
   assert.strictEqual(SettingsLogic.nextValue(SPECS.backlight, state.backlight, 1), state.backlight.value, "no step past the maximum");
 });
 
 test("one failed read leaves the rest of Settings working", () => {
   const read = replies();
-  read[4] = new Error("Unknown key energySaving");
+  read[3] = new Error("Unknown key energySaving");
   read[1] = new Error("No response");
   const { state, failed } = SettingsLogic.applyReadings(SPECS, {}, read, {}, CHOICES);
   assert.match(failed.message, /No response/);
@@ -69,9 +70,9 @@ test("a setting changed while a load ran keeps its new value", () => {
 
 test("a load reads each category's settings, and the network replies after the choices however many there are", () => {
   assert.deepStrictEqual(SettingsLogic.READ_CATEGORIES.map((category) => SettingsLogic.keysIn(SPECS, category)),
-    [["pictureMode", "backlight", "energySaving"], ["soundMode"], ["quickStartMode"]]);
+    [["pictureMode", "backlight", "energySaving"], ["soundMode"]]);
   const read = replies();
-  read.splice(7, 0, values("x", "y"));
+  read.splice(5, 0, values("x", "y"));
   const fiveChoices = CHOICES.concat(["backlight"]);
   const { network } = SettingsLogic.applyReadings(Object.assign({}, SPECS, { backlight: SPECS.pictureMode }), {}, read, {}, fiveChoices);
   assert.deepStrictEqual(network, { connection: { wifi: { state: "connected" } }, wifi: { status: "connectionStateChanged" } });
@@ -79,7 +80,7 @@ test("a load reads each category's settings, and the network replies after the c
 
 test("a failed network read shows nothing new and counts as a failure, rather than Wi-Fi Off", () => {
   const read = replies();
-  read[7] = new Error("No reply");
+  read[5] = new Error("No reply");
   const { network, failed } = SettingsLogic.applyReadings(SPECS, {}, read, {}, CHOICES);
   assert.strictEqual(network, null);
   assert.match(failed.message, /No reply/);
@@ -88,7 +89,7 @@ test("a failed network read shows nothing new and counts as a failure, rather th
 test("a failed read of the choices on offer keeps the ones known from before", () => {
   const before = SettingsLogic.applyReadings(SPECS, {}, replies(), {}, CHOICES).state;
   const read = replies();
-  read[4] = new Error("Timed out");
+  read[3] = new Error("Timed out");
   const { state } = SettingsLogic.applyReadings(SPECS, before, read, {}, CHOICES);
   assert.deepStrictEqual(state.energySaving.values, ["auto", "off"]);
   assert.strictEqual(SettingsLogic.nextValue(SPECS.energySaving, state.energySaving, 1), "off", "Right still changes it");
@@ -97,6 +98,7 @@ test("a failed read of the choices on offer keeps the ones known from before", (
 // Settings pages, with descriptions and replies in the TV's shapes.
 const PAGE = {
   context: "picture",
+  extra: [{ key: "pictureSettingModified", category: "picture" }],
   sections: [
     { title: "Mode", rows: [
       { key: "pictureMode", category: "picture", kind: "choice", label: "Picture mode", labels: { normal: "Standard", eco: "Auto Power Save" } },
@@ -171,7 +173,7 @@ test("rows the TV doesn't offer are hidden; greyed rows say why", () => {
   assert.strictEqual(SettingsLogic.rowView(ROWS[3], state).hidden, true);
   state.descs.sharpness = Object.assign({}, state.descs.sharpness, { visible: true, active: false });
   assert.deepStrictEqual([SettingsLogic.rowView(ROWS[3], state).greyed, SettingsLogic.rowView(ROWS[3], state).reason],
-    [true, "Not available with this picture mode or signal"]);
+    [true, "Not available now"]);
   const backlight = SettingsLogic.rowView(ROWS[2], state);
   assert.strictEqual(backlight.greyed, false, "energy saving is off");
   state.values.energySaving = "auto";
@@ -193,29 +195,29 @@ test("ranges of 100 step by 5 and smaller ones by 1, within the TV's range; choi
 
 test("a write targets the context, and the first change in a mode also sets LG's flag for it, per input", () => {
   const { state } = opened();
-  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[3], 26, state), [
+  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[3], 26, state, PAGE), [
     { method: "setSystemSettings", params: { category: "picture", settings: { sharpness: 26 }, dimension: { input: "dtv", pictureMode: "eco" } } },
     { method: "setSystemSettings", params: { category: "picture", settings: { pictureSettingModified: { normal: false, eco: true, vivid: true } }, dimension: { input: "dtv" } } }
   ]);
-  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[1], "max", state),
+  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[1], "max", state, PAGE),
     [{ method: "setSystemSettings", params: { category: "picture", settings: { energySaving: "max" } } }], "no dimension, no flag for a key of every input");
-  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[0], "vivid", state),
+  assert.deepStrictEqual(SettingsLogic.writeOperations(ROWS[0], "vivid", state, PAGE),
     [{ method: "setSystemSettings", params: { category: "picture", settings: { pictureMode: "vivid" }, dimension: { input: "dtv", dynamicRange: "sdr" } } }]);
   const vivid = Object.assign({}, state, { context: Object.assign({}, state.context, { pictureMode: "vivid" }) });
-  assert.strictEqual(SettingsLogic.writeOperations(ROWS[3], 26, vivid).length, 1, "the flag is already set");
+  assert.strictEqual(SettingsLogic.writeOperations(ROWS[3], 26, vivid, PAGE).length, 1, "the flag is already set");
   const unknown = Object.assign({}, state, { context: { input: "hdmi2", dynamicRange: "sdr" } });
-  assert.strictEqual(SettingsLogic.writeOperations(ROWS[3], 26, unknown), null, "the mode of HDMI 2 isn't known yet");
+  assert.strictEqual(SettingsLogic.writeOperations(ROWS[3], 26, unknown, PAGE), null, "the mode of HDMI 2 isn't known yet");
 });
 
 test("after a write the page keeps the value and the flag, and a new picture mode becomes the context's", () => {
   const { state } = opened();
-  const operations = SettingsLogic.writeOperations(ROWS[3], 26, state);
+  const operations = SettingsLogic.writeOperations(ROWS[3], 26, state, PAGE);
   const written = SettingsLogic.applyWrite(state, ROWS[3], 26, operations, [{ returnValue: true }, { returnValue: true }]);
   assert.strictEqual(written.values.sharpness, 26);
   assert.strictEqual(written.values.pictureSettingModified.eco, true);
   const flagFailed = SettingsLogic.applyWrite(state, ROWS[3], 26, operations, [{ returnValue: true }, { returnValue: false }]);
   assert.strictEqual(flagFailed.values.pictureSettingModified.eco, false);
-  const mode = SettingsLogic.applyWrite(state, ROWS[0], "vivid", SettingsLogic.writeOperations(ROWS[0], "vivid", state), [{ returnValue: true }]);
+  const mode = SettingsLogic.applyWrite(state, ROWS[0], "vivid", SettingsLogic.writeOperations(ROWS[0], "vivid", state, PAGE), [{ returnValue: true }]);
   assert.strictEqual(mode.context.pictureMode, "vivid");
   assert.throws(() => SettingsLogic.applyWrite(state, ROWS[3], 26, operations, [{ returnValue: false, errorText: "Busy" }]), /Busy/);
 });
@@ -252,8 +254,119 @@ test("Applies to offers the apps, live TV and each HDMI input, and says what a r
   assert.deepStrictEqual(SettingsLogic.inputChoices(null, "hdmi3", {}).values, ["default", "dtv", "hdmi3"], "without the inputs, the current one");
   const { state } = opened();
   const labels = { labels: { dtv: "Live TV" } };
-  assert.strictEqual(SettingsLogic.scopeText(ROWS[3], SettingsLogic.rowView(ROWS[3], state), state, labels, PAGE.sections[0].rows[0].labels),
+  assert.strictEqual(SettingsLogic.scopeText(ROWS[3], SettingsLogic.rowView(ROWS[3], state), state, PAGE, labels, PAGE.sections[0].rows[0].labels),
     "Applies to Live TV in Auto Power Save");
-  assert.strictEqual(SettingsLogic.scopeText(ROWS[0], SettingsLogic.rowView(ROWS[0], state), state, labels), "Applies to Live TV with SDR signals");
-  assert.strictEqual(SettingsLogic.scopeText(ROWS[1], SettingsLogic.rowView(ROWS[1], state), state, labels), "Applies to every input");
+  assert.strictEqual(SettingsLogic.scopeText(ROWS[0], SettingsLogic.rowView(ROWS[0], state), state, PAGE, labels), "Applies to Live TV with SDR signals");
+  assert.strictEqual(SettingsLogic.scopeText(ROWS[1], SettingsLogic.rowView(ROWS[1], state), state, PAGE, labels), "Applies to every input");
+});
+
+test("the sleep timer shows the shortest choice that covers the time left, and the minutes left", () => {
+  assert.deepStrictEqual(SettingsLogic.sleepTimerFrom({ sleepTimeSecond: 0 }), { value: "off", note: "" });
+  assert.deepStrictEqual(SettingsLogic.sleepTimerFrom({ sleepTimeMinute: 9, sleepTimeSecond: 58 }), { value: "10", note: "10 min left" },
+    "as the TV answered 2 s after a 10 minute timer was set");
+  assert.deepStrictEqual(SettingsLogic.sleepTimerFrom({ sleepTimeMinute: 27, sleepTimeSecond: 30 }), { value: "30", note: "28 min left" });
+  assert.deepStrictEqual(SettingsLogic.sleepTimerFrom({ sleepTimeMinute: 300, sleepTimeSecond: 0 }).value, "240");
+  const off = { kind: "choice", key: "sleepTimer", source: "sleepTimer" };
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(off, "off"), ["luna://com.webos.service.tvReservationAgent/timer/sleep/add", { sleepTimeMinute: "0" }]);
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(off, "30")[1], { sleepTimeMinute: "30" });
+});
+
+const SOURCE_ROWS = [
+  { key: "sleepTimer", source: "sleepTimer", kind: "choice" }, { key: "wifiEnabled", source: "network", kind: "choice" },
+  { key: "wifiStatus", source: "network", kind: "info" }, { key: "ethernet", source: "network", kind: "info" }
+];
+
+test("rows from other services read in one go, each source's replies in turn", () => {
+  assert.deepStrictEqual(SettingsLogic.sourceCalls(SOURCE_ROWS).map((call) => call[0].replace("luna://com.webos.service.", "")),
+    ["tvReservationAgent/timer/sleep/getRemainTime", "connectionmanager/getstatus", "wifi/getstatus"]);
+  const { state, failed } = SettingsLogic.applySources(SettingsLogic.emptyPageState(), SOURCE_ROWS, [
+    { sleepTimeMinute: 27, sleepTimeSecond: 30 },
+    { wired: { state: "disconnected", plugged: false }, wifi: { state: "connected", ssid: "Home", ipAddress: "192.168.1.5" } },
+    { status: "connectionStateChanged" }
+  ], {});
+  assert.strictEqual(failed, null);
+  assert.deepStrictEqual([state.values.sleepTimer, state.notes.sleepTimer], ["30", "28 min left"]);
+  assert.deepStrictEqual([state.values.wifiEnabled, state.values.wifiStatus, state.values.ethernet, state.notes.ethernet],
+    ["enabled", "Home · 192.168.1.5", "Unplugged", "No cable connected"]);
+  const wifi = SettingsLogic.rowView(SOURCE_ROWS[1], state);
+  assert.deepStrictEqual([wifi.hidden, wifi.values], [false, ["disabled", "enabled"]]);
+  assert.strictEqual(SettingsLogic.rowView(SOURCE_ROWS[2], state).text, "Home · 192.168.1.5");
+});
+
+test("a source whose read failed leaves its rows as they were, and the others work", () => {
+  const { state, failed } = SettingsLogic.applySources(SettingsLogic.emptyPageState(), SOURCE_ROWS, [
+    new Error("No reply"), { wired: {}, wifi: { state: "connected" } }, { status: "serviceDisabled" }
+  ], {});
+  assert.match(failed.message, /No reply/);
+  assert.strictEqual(SettingsLogic.rowView(SOURCE_ROWS[0], state).hidden, true);
+  assert.strictEqual(state.values.wifiEnabled, "disabled", "the radio is off although the last state said connected");
+  assert.strictEqual(state.values.wifiStatus, "Wireless radio is off");
+});
+
+const SOUND = {
+  sections: [{ title: "Sync", rows: [
+    { key: "soundOutput", category: "sound", kind: "info", labels: { tv_external_speaker: "Optical Out Device + TV Speaker" } },
+    { key: "avSyncSpeaker", category: "sound", kind: "range", hideWhen: { key: "soundOutput", values: ["external_arc"] },
+      greyedWhen: { key: "avSyncBypassInput", values: ["on"], reason: "Bypass is on" } },
+    { key: "avSyncSpdif", category: "sound", kind: "range", showWhen: { key: "soundOutput", values: ["external_arc"] } },
+    { key: "highContrast", category: "option", kind: "choice", "with": { adjustments: { blackAndWhite: "off", colorInversion: "off" } },
+      greyedWhen: [{ key: "adjustments", field: "blackAndWhite", values: ["on"], reason: "Grayscale is on" },
+        { key: "adjustments", field: "colorInversion", values: ["on"], reason: "Invert colours is on" }] },
+    { key: "wifiEnabled", source: "network", kind: "choice", confirm: { values: ["disabled"], prompt: "OK again" } },
+    { key: "userGuide", kind: "link", launch: { id: "com.webos.app.tvuserguide" } }
+  ] }]
+};
+const SOUND_ROWS = SettingsLogic.pageRows(SOUND);
+const soundState = (values) => ({
+  values: Object.assign({ soundOutput: "tv_external_speaker", avSyncSpeaker: 0, avSyncSpdif: 0, avSyncBypassInput: "off", highContrast: "off",
+    adjustments: { blackAndWhite: "off", colorInversion: "off" } }, values),
+  descs: { soundOutput: { dims: ["audioOutput"], visible: true, active: true }, avSyncSpeaker: { dims: ["audioInput"], visible: true, active: true, range: { min: 0, max: 60 } },
+    avSyncSpdif: { dims: ["audioInput"], visible: true, active: true, range: { min: 0, max: 60 } },
+    highContrast: { dims: [], visible: true, active: true, choices: [{ value: "on" }, { value: "off" }] } },
+  notes: {}, context: { audioInput: "hdmi2", audioOutput: "default" }
+});
+
+test("the sound delay row of the output in use shows, and Bypass greys it", () => {
+  const optical = soundState({});
+  assert.deepStrictEqual(SOUND_ROWS.slice(1, 3).map((row) => SettingsLogic.rowView(row, optical).hidden), [false, true]);
+  const arc = soundState({ soundOutput: "external_arc" });
+  assert.deepStrictEqual(SOUND_ROWS.slice(1, 3).map((row) => SettingsLogic.rowView(row, arc).hidden), [true, false]);
+  assert.strictEqual(SettingsLogic.rowView(SOUND_ROWS[1], soundState({ avSyncBypassInput: "on" })).reason, "Bypass is on");
+  assert.strictEqual(SettingsLogic.rowView(SOUND_ROWS[0], optical).text, "Optical Out Device + TV Speaker", "an info row shows its label");
+});
+
+test("pages without Applies to write as LG Settings does, without a dimension, and with LG's combined settings", () => {
+  const state = soundState({});
+  assert.deepStrictEqual(SettingsLogic.writeOperations(SOUND_ROWS[1], 20, state, SOUND),
+    [{ method: "setSystemSettings", params: { category: "sound", settings: { avSyncSpeaker: 20 } } }]);
+  const operations = SettingsLogic.writeOperations(SOUND_ROWS[3], "on", state, SOUND);
+  assert.deepStrictEqual(operations, [{ method: "setSystemSettings", params: { category: "option",
+    settings: { highContrast: "on", adjustments: { blackAndWhite: "off", colorInversion: "off" } } } }]);
+  assert.deepStrictEqual(SettingsLogic.applyWrite(state, SOUND_ROWS[3], "on", operations, [{ returnValue: true }]).values.adjustments,
+    { blackAndWhite: "off", colorInversion: "off" });
+  assert.strictEqual(SettingsLogic.writeOperations(SOUND_ROWS[4], "disabled", state, SOUND), null, "a source row writes through its service");
+  assert.strictEqual(SettingsLogic.scopeText(SOUND_ROWS[1], SettingsLogic.rowView(SOUND_ROWS[1], state), state, SOUND), "Applies to what is playing now");
+});
+
+test("a rule can read a field of an object value, and the first rule that holds says why", () => {
+  const grey = soundState({ adjustments: { blackAndWhite: "off", colorInversion: "on" } });
+  assert.deepStrictEqual([SettingsLogic.rowView(SOUND_ROWS[3], grey).greyed, SettingsLogic.rowView(SOUND_ROWS[3], grey).reason], [true, "Invert colours is on"]);
+  assert.strictEqual(SettingsLogic.rowView(SOUND_ROWS[3], soundState({})).greyed, false);
+});
+
+test("turning Wi-Fi off asks first; links always show and open what they name", () => {
+  assert.strictEqual(SettingsLogic.needsConfirm(SOUND_ROWS[4], "disabled"), true);
+  assert.strictEqual(SettingsLogic.needsConfirm(SOUND_ROWS[4], "enabled"), false);
+  assert.strictEqual(SettingsLogic.needsConfirm(SOUND_ROWS[1], 20), false);
+  assert.deepStrictEqual(SettingsLogic.rowView(SOUND_ROWS[5], soundState({})), { hidden: false, greyed: false, reason: "", text: "›", note: "", perInput: false });
+  assert.deepStrictEqual(SettingsLogic.currentReads(SOUND_ROWS, SOUND, false).map((operation) => operation.params), [
+    { category: "sound", keys: ["soundOutput", "avSyncSpeaker", "avSyncSpdif"] }, { category: "option", keys: ["highContrast"] }
+  ], "values only; sources and links aren't settingsservice keys");
+});
+
+test("a time zone shows its city and name", () => {
+  const row = { key: "timeZone", category: "time", kind: "info", format: "timeZone" };
+  const state = { values: { timeZone: { City: "Stockholm", Description: "Central European Time", ZoneID: "Europe/Stockholm" } },
+    descs: { timeZone: { dims: [], visible: true, active: true } }, notes: {}, context: {} };
+  assert.strictEqual(SettingsLogic.rowView(row, state).text, "Stockholm · Central European Time");
 });

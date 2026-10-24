@@ -64,7 +64,13 @@
     settings: { back: "home", from: "settings", module: MinimalSettings },
     remote: { back: "settings", from: "settings", module: RemoteButtons },
     appearance: { back: "settings", from: "settings", module: Appearance },
-    picture: { back: "settings", from: "settings", module: SettingsPage.create("picture") }
+    picture: { back: "settings", from: "settings", module: SettingsPage.create("picture") },
+    sound: { back: "settings", from: "settings", module: SettingsPage.create("sound") },
+    network: { back: "settings", from: "settings", module: SettingsPage.create("network") },
+    power: { back: "settings", from: "settings", module: SettingsPage.create("power") },
+    general: { back: "settings", from: "settings", module: SettingsPage.create("general") },
+    accessibility: { back: "settings", from: "settings", module: SettingsPage.create("accessibility") },
+    about: { back: "settings", from: "settings", module: SettingsPage.create("about") }
   };
   var view = "home";
   var installed = [];

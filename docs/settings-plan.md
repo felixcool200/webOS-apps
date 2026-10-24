@@ -1,6 +1,6 @@
 # Plan: Minimal Home's Settings covering LG's Settings
 
-Status: Phase 1 (the page engine and the Picture page) is built, in Minimal Home 0.3.49. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
+Status: Phases 1 to 6 are built, in Minimal Home 0.3.51: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages. Phase 7 (rows with care, actions and per-app keys) is not. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
 
 ## Decisions and checks (2026-10-24)
 
@@ -13,6 +13,11 @@ Status: Phase 1 (the page engine and the Picture page) is built, in Minimal Home
 - **Transport (Phase 0 check 2):** one `settingsservice/batch` per read or write. Measured over SSH only (4.3); the Homebrew Channel exec hop is the same for both ways.
 - De-Judder waits for TruMotion (Phase 7): LG shows it only under TruMotion's User Selection, which is per app.
 - Energy saving, Reduce blue light and FILMMAKER MODE auto start have no dimension: they apply to every input, and the page says so.
+- **Other pages (questions 4, 8, 9, 10, 14), taken from the recommendation in section 2:** Live Plus and Limit ad tracking are on General, and screensaver promotion on Power and energy; Sound out is read-only; Accessibility has the plan's rows; the power on and off timers stay in LG Settings; turning Wi-Fi off asks for OK twice. Energy saving is on both Picture and Power and energy.
+- **Pages without "Applies to" write without a dimension,** as LG Settings does, so sound settings kept per input change the one playing now.
+- **The sleep timer (Phase 3, checked on the TV):** `getRemainTime` answers the time left as `sleepTimeMinute` and `sleepTimeSecond` (9 and 58 two seconds after a 10 minute timer), not as seconds in all; with no timer only `sleepTimeSecond: 0`. `add` with `"10"` and `"0"` set and cancelled it.
+- **LG's targets:** `picture`, `sound`, `general`, `EnergySaving`, `accessibility`, `TVInformation` and `SoftwareUpdate` are all in LG Settings' target table (`oV`). The screen capture leaves out LG Settings' overlay, so the panels it opens were not seen; `com.webos.app.firstuse-overlay` with `{target: "network"}` opened LG's Internet Connection screen.
+- **The hub:** one-line link rows (6.4vh) keep both columns above the footer: five quick rows and two Minimal Home links on the left, seven page links and the LG card on the right.
 
 ## Summary
 

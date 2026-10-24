@@ -1,6 +1,8 @@
-// The Settings view inside Minimal Home. Home shows #settings-view and routes keys and pointer
-// movement here while it is open; this module never listens on the document itself. Rows with a
-// data-view attribute lead to another view of the page.
+// The Settings view inside Minimal Home: a hub of quick rows and links. Home shows #settings-view and
+// routes keys and pointer movement here while it is open; this module never listens on the document
+// itself. Rows with a data-view attribute lead to another view of the page: Remote buttons,
+// Appearance, and the Settings pages (settings-page.js), whose rows show a summary from what the hub
+// reads.
 var MinimalSettings = (function () {
   "use strict";
 
@@ -20,17 +22,15 @@ var MinimalSettings = (function () {
   var ready = false;
   var loaded = false;
 
-  // The quick rows. Picture mode and energy saving use the Picture page's names (settings-specs.js).
+  // The quick rows, with the pages' names for their values (settings-specs.js). The sleep timer is
+  // read and set through tvReservationAgent, as on the Power and energy page.
+  var LABELS = SettingsSpecs.LABELS;
   var SPECS = {
-    pictureMode: { category: "picture", kind: "choice", labels: SettingsSpecs.LABELS.pictureMode },
+    pictureMode: { category: "picture", kind: "choice", labels: LABELS.pictureMode },
     backlight: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
-    energySaving: { category: "picture", kind: "choice", labels: SettingsSpecs.LABELS.energySaving },
-    soundMode: { category: "sound", kind: "choice", labels: {
-      aiSoundPlus: "AI Sound Pro", standard: "Standard", movie: "Cinema",
-      news: "Clear Voice", sports: "Sports", music: "Music", game: "Game"
-    }},
-    quickStartMode: { category: "option", kind: "choice", order: ["off", "on"], labels: { on: "On", off: "Off" } },
-    wifiEnabled: { category: "network", kind: "choice", labels: { enabled: "On", disabled: "Off" } }
+    energySaving: { category: "picture", kind: "choice", labels: LABELS.energySaving },
+    soundMode: { category: "sound", kind: "choice", labels: LABELS.soundMode },
+    sleepTimer: { category: "timer", kind: "choice", labels: LABELS.sleepTimer }
   };
 
   function setStatus(message, type) {
@@ -61,6 +61,7 @@ var MinimalSettings = (function () {
     if (!item || !element) { return; }
     element.querySelector(".value").textContent = spec.kind === "choice" ? labelFor(key, item.value) : String(item.value);
     element.classList.toggle("is-greyed", !!greyedReason(key));
+    if (item.note !== undefined) { element.querySelector("small").textContent = item.note || "Turns the TV off after a while"; }
     if (spec.kind === "range") {
       var percent = (Number(item.value) - spec.min) / (spec.max - spec.min) * 100;
       element.querySelector(".range").style.setProperty("--fill", Math.max(0, Math.min(100, percent)) + "%");
@@ -68,49 +69,22 @@ var MinimalSettings = (function () {
     renderEditDirections(key);
   }
 
-  function networkDetail(connection) {
-    var parts = [];
-    if (connection.ssid) { parts.push(connection.ssid); }
-    if (connection.ipAddress) { parts.push(connection.ipAddress); }
-    if (connection.dns1) { parts.push("DNS " + connection.dns1); }
-    if (connection.onInternet === "no") { parts.push("No internet"); }
-    return parts.join(" · ");
-  }
-
+  // The hub's summary of the network, on the Network row: the connection in use.
   function renderNetwork(connectionStatus, wifiStatus) {
-    var wifi = connectionStatus && connectionStatus.wifi ? connectionStatus.wifi : {};
-    var wired = connectionStatus && connectionStatus.wired ? connectionStatus.wired : {};
-    var serviceStatus = wifiStatus && wifiStatus.status;
-    var enabled = serviceStatus !== "serviceDisabled";
-    if (!serviceStatus && wifi.state !== "connected") { enabled = false; }
-
-    state.wifiEnabled = { value: enabled ? "enabled" : "disabled", values: ["disabled", "enabled"] };
-    renderSetting("wifiEnabled");
-
-    var wifiDetail = document.getElementById("wifi-detail");
-    if (!enabled) { wifiDetail.textContent = "Wireless radio is off"; }
-    else if (wifi.state === "connected") { wifiDetail.textContent = networkDetail(wifi) || "Connected"; }
-    else { wifiDetail.textContent = "On · Not connected"; }
-
-    var ethernetValue = document.getElementById("ethernet-value");
-    var ethernetDetail = document.getElementById("ethernet-detail");
-    if (wired.state === "connected") {
-      ethernetValue.textContent = "Connected";
-      ethernetDetail.textContent = networkDetail(wired) || "Cable connected";
-    } else if (wired.plugged) {
-      ethernetValue.textContent = "No network";
-      ethernetDetail.textContent = "Cable connected · No address";
-    } else {
-      ethernetValue.textContent = "Unplugged";
-      ethernetDetail.textContent = "No cable connected";
-    }
+    var status = SettingsLogic.networkStatus(connectionStatus, wifiStatus);
+    var wifi = (connectionStatus && connectionStatus.wifi) || {};
+    var summary = status.ethernet === "Connected" ? "Ethernet" : wifi.state === "connected" ? "Wi-Fi" + (wifi.ssid ? " · " + wifi.ssid : "") :
+      status.wifiEnabled === "enabled" ? "Not connected" : "Wi-Fi off";
+    setLinkValue("network", summary);
   }
+
+  var SLEEP = "luna://com.webos.service.tvReservationAgent/timer/sleep/";
 
   function readCurrent(category, keys) {
     return rootLuna("luna://com.webos.settingsservice/getSystemSettings", { category: category, keys: keys });
   }
 
-  var CHOICE_KEYS = ["pictureMode", "energySaving", "soundMode", "quickStartMode"];
+  var CHOICE_KEYS = ["pictureMode", "energySaving", "soundMode"];
 
   // Reads every value and the choices on offer in one root call, in the order applyReadings expects. A
   // read that fails only leaves its own settings as they were.
@@ -127,7 +101,8 @@ var MinimalSettings = (function () {
       return [settings + "getSystemSettingValues", { category: SPECS[key].category, key: key }];
     }), [
       ["luna://com.webos.service.connectionmanager/getstatus", {}],
-      ["luna://com.webos.service.wifi/getstatus", {}]
+      ["luna://com.webos.service.wifi/getstatus", {}],
+      [SLEEP + "getRemainTime", {}]
     ])).then(function (results) {
       if (run !== loadRun) { return; }
       var applied = SettingsLogic.applyReadings(SPECS, state, results, touched, CHOICE_KEYS);
@@ -136,6 +111,7 @@ var MinimalSettings = (function () {
       if (applied.network) { renderNetwork(applied.network.connection, applied.network.wifi); }
       Object.keys(SPECS).forEach(renderSetting);
       if (state.pictureMode && state.backlight) { setLinkValue("picture", labelFor("pictureMode", state.pictureMode.value) + " · " + state.backlight.value); }
+      if (state.soundMode) { setLinkValue("sound", labelFor("soundMode", state.soundMode.value)); }
       var failed = applied.failed;
       if (failed) { setStatus("Could not read some settings: " + failed.message, "error"); }
       else if (editing) { editingStatus(); }
@@ -170,10 +146,10 @@ var MinimalSettings = (function () {
     setStatus("Changing " + element.querySelector("strong").textContent + "…");
 
     var request;
-    if (key === "wifiEnabled") {
-      request = rootLuna("luna://com.webos.service.connectionmanager/setstate", { wifi: value });
+    if (key === "sleepTimer") {
+      request = rootLuna(SLEEP + "add", { sleepTimeMinute: value === "off" ? "0" : value });
     } else {
-      var context = key === "pictureMode" || spec.category === "option" ? Promise.resolve({}) :
+      var context = key === "pictureMode" ? Promise.resolve({}) :
         readCurrent(spec.category, [key]).then(function (result) { return result.dimension || {}; });
       request = context.then(function (dimension) {
         var payload = { category: spec.category, settings: {} };
@@ -189,7 +165,6 @@ var MinimalSettings = (function () {
       if (editing) { editingStatus("Saved"); }
       else { setStatus("Saved", "ok"); }
       if (key === "pictureMode") { return load(); }
-      if (key === "wifiEnabled") { window.setTimeout(load, 1200); }
     }).catch(function (error) {
       setStatus("Could not change setting: " + error.message, "error");
     }).then(function () {

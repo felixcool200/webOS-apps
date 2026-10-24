@@ -7,19 +7,21 @@
 //   settings: { picture: {...}, sound: {...}, option: {...} } values for every input and mode
 //   inputSettings: { hdmi2: { picture: {...} } } values for one input, in every mode
 //   now: the context the TV is in, such as { input: "hdmi2" } (apps, SDR, media sound by default)
+//   sleepSeconds: the sleep timer's time left; wifiOff: true when the Wi-Fi radio is off
 //   desc: { "picture.localDimming": { visible: false } } changes a key's description's ui
 //   delays: { name: ms or [ms for the 1st call, 2nd, ...] } for listApps, settings, bindings, inputs
 //   lose: { name: [call numbers whose reply never comes, from 1] }
 //   fail: ["getSystemSettingValues:energySaving", "getSystemSettingDesc:picture", ...] reads that
 //     answer returnValue false
 // window.FAKE_TV keeps what happened: files, launched apps (with their params in `launches`),
-// settings written (`written` as [key, value], `writes` with their category and dimension), calls made.
+// settings written (`written` as [key, value], `writes` with their category and dimension), sleep
+// timers set (`sleep`, in minutes), Wi-Fi turned on or off (`wifi`), calls made.
 (function () {
   "use strict";
 
   var CONFIG = "/home/root/.config/lginputhook/keybinds.json";
   var BACKUP = CONFIG + ".before-test";
-  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], calls: [], counts: {}, ready: false };
+  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], sleep: [], wifi: [], calls: [], counts: {}, ready: false };
 
   var APPS = [
     { id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" },
@@ -33,6 +35,9 @@
   // as per input and picture mode), and their choices or range, as the TV describes them.
   var MODE = ["input", "pictureMode"];
   var LEVELS = ["off", "low", "medium", "high"];
+  var ON_OFF = ["on", "off"];
+  var SWITCH = { dims: [], choices: ON_OFF };
+  var DELAY = { dims: ["audioInput"], range: [0, 60] };
   var DESC = {
     picture: {
       pictureMode: { dims: ["input", "dynamicRange"], choices: ["normal", "vivid", "cinema", "eco"] },
@@ -49,8 +54,28 @@
       eyeComfortMode: { dims: [], choices: ["on", "off"] }, filmMakerMode: { dims: [], choices: ["on", "off"] }
     },
     aiPicture: { ai_Brightness: { dims: MODE, choices: ["on", "off"] } },
-    sound: { soundMode: { dims: ["audioInput", "soundOutput"], choices: ["standard", "movie"] } },
-    option: { quickStartMode: { dims: [], choices: ["on", "off"] } }
+    sound: {
+      soundMode: { dims: ["audioInput", "soundOutput"], choices: ["standard", "movie", "news"] },
+      soundOutput: { dims: ["audioOutput"], choices: ["tv_speaker", "external_optical", "external_arc", "tv_external_speaker"] },
+      supportATMOS: SWITCH, audioBalance: { dims: [], range: [-50, 50] }, tvSetupConfiguration: { dims: [], choices: ["stand", "wall_mount"] },
+      autoVolume: SWITCH, avSyncSpeaker: DELAY, avSyncSpdif: DELAY, avSyncBtSurround: DELAY, avSyncWisa: DELAY,
+      avSyncBypassInput: { dims: ["audioInput"], choices: ON_OFF }, digitalAudioPriority: { dims: [], choices: ["mpeg", "dolbyDigital", "auto"] },
+      soundOutputDigital: { dims: ["audioInput"], choices: ["pcm", "auto", "passThrough"] }, lgSoundSync: SWITCH, ac4DialogueEnhancer: SWITCH,
+      tvPowerSound: SWITCH, audioDescription: SWITCH, audioDescriptionVolume: { dims: [], range: [-15, 15] }
+    },
+    time: {
+      automaticStandBy: { dims: [], choices: ["0", "2", "4", "6", "8"] }, autoOff15Min: SWITCH, autoOff2HourOnTimer: SWITCH,
+      autoClock: SWITCH, timeZone: { dims: [] }
+    },
+    option: {
+      quickStartMode: SWITCH, standByLight: SWITCH, screenSaverTimer: { dims: [], choices: ["3", "10", "20", "30"] },
+      pointerSpeed: { dims: [], choices: ["slow", "normal", "fast"] }, pointerSize: { dims: [], choices: ["small", "medium", "large"] },
+      livePlus: SWITCH, menuLanguage: { dims: [] }, highContrast: SWITCH, focusEmphasis: SWITCH, adjustments: { dims: [] },
+      subtitleLanguageFirst: { dims: [], choices: ["eng", "fin", "swe"] }, subtitleLanguageSecond: { dims: [], choices: ["eng", "fin", "swe"] }
+    },
+    general: { screenSaverAd: SWITCH, lmt: SWITCH },
+    network: { deviceName: { dims: [] } },
+    caption: { hardOfHearing: SWITCH }
   };
   // Values as the TV reports them, most ranges as text.
   var DEFAULTS = {
@@ -62,8 +87,24 @@
       pictureSettingModified: { normal: false, vivid: false, cinema: false, eco: false }
     },
     aiPicture: { ai_Brightness: "off" },
-    sound: { soundMode: "standard" },
-    option: { quickStartMode: "on" }
+    sound: {
+      soundMode: "standard", soundOutput: "tv_external_speaker", supportATMOS: "on", audioBalance: "0", tvSetupConfiguration: "stand",
+      autoVolume: "off", avSyncSpeaker: "0", avSyncSpdif: "0", avSyncBtSurround: "0", avSyncWisa: "0", avSyncBypassInput: "off",
+      digitalAudioPriority: "auto", soundOutputDigital: "auto", lgSoundSync: "off", ac4DialogueEnhancer: "off", tvPowerSound: "off",
+      audioDescription: "off", audioDescriptionVolume: "10"
+    },
+    time: {
+      automaticStandBy: "4", autoOff15Min: "on", autoOff2HourOnTimer: "on", autoClock: "on",
+      timeZone: { Country: "Sweden", Description: "Central European Time", City: "Stockholm", ZoneID: "Europe/Stockholm" }
+    },
+    option: {
+      quickStartMode: "on", standByLight: "off", screenSaverTimer: "3", pointerSpeed: "slow", pointerSize: "small", livePlus: "off",
+      menuLanguage: "eng", highContrast: "off", focusEmphasis: "off", adjustments: { blackAndWhite: "off", colorInversion: "off" },
+      subtitleLanguageFirst: "swe", subtitleLanguageSecond: "eng"
+    },
+    general: { screenSaverAd: "off", lmt: "off" },
+    network: { deviceName: "[LG] webOS TV QNED80T6A" },
+    caption: { hardOfHearing: "off" }
   };
 
   function setUp() {
@@ -71,7 +112,9 @@
     tv.ready = true;
     // Values written or set by the test, by category, key and dimension (storeKey).
     tv.values = {};
-    tv.now = Object.assign({ input: "default", dynamicRange: "sdr", audioInput: "media", soundOutput: "tv_external_speaker" }, options().now);
+    tv.now = Object.assign({ input: "default", dynamicRange: "sdr", audioInput: "media", soundOutput: "tv_external_speaker", audioOutput: "default" }, options().now);
+    tv.sleepSeconds = options().sleepSeconds || 0;
+    tv.wifiOn = !options().wifiOff;
     tv.files[CONFIG] = JSON.stringify(options().bindings || { "1038": { action: "ignore" } });
     tv.hooked = options().hooked !== false;
   }
@@ -203,8 +246,27 @@
       if (fails("getSystemSettingValues:" + payload.key)) { return { returnValue: false, errorText: "Unknown key " + payload.key }; }
       return { returnValue: true, values: { arrayExt: (descOf(payload.category, payload.key).choices || []).map(function (value) { return { value: value }; }) } };
     }
-    if (/connectionmanager\/getstatus$/.test(method)) { return { returnValue: true, wired: { state: "disconnected" }, wifi: { state: "connected", ssid: "Home" } }; }
-    if (/wifi\/getstatus$/.test(method)) { return { returnValue: true, status: "connectionStateChanged" }; }
+    if (/connectionmanager\/getstatus$/.test(method)) {
+      return { returnValue: true, wired: { state: "disconnected" }, wifi: tv.wifiOn ? { state: "connected", ssid: "Home", ipAddress: "192.168.1.5" } : { state: "disconnected" } };
+    }
+    if (/connectionmanager\/setstate$/.test(method)) {
+      tv.wifiOn = payload.wifi === "enabled";
+      tv.wifi.push(payload.wifi);
+      return { returnValue: true };
+    }
+    if (/wifi\/getstatus$/.test(method)) { return { returnValue: true, status: tv.wifiOn ? "connectionStateChanged" : "serviceDisabled" }; }
+    if (/timer\/sleep\/getRemainTime$/.test(method)) {
+      // As the TV answers: minutes and the seconds left over, or only sleepTimeSecond 0 when off.
+      return tv.sleepSeconds ? { returnValue: true, sleepTimeMinute: Math.floor(tv.sleepSeconds / 60), sleepTimeSecond: tv.sleepSeconds % 60 } :
+        { returnValue: true, sleepTimeSecond: 0 };
+    }
+    if (/timer\/sleep\/add$/.test(method)) {
+      tv.sleepSeconds = Number(payload.sleepTimeMinute) * 60;
+      tv.sleep.push(Number(payload.sleepTimeMinute));
+      return { returnValue: true };
+    }
+    if (/systemproperty\/getSystemInfo$/.test(method)) { return { returnValue: true, modelName: "65QNED80T6A.BEUFLJP", firmwareVersion: "33.31.75" }; }
+    if (/osInfo\/query$/.test(method)) { return { returnValue: true, webos_name: "webOS TV Lite", webos_release: "10.3.2" }; }
     if (/eim\/getAllInputStatus$/.test(method)) {
       var count = options().inputs || 3;
       var devices = [];
