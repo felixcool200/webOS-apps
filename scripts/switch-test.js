@@ -107,22 +107,29 @@ function main() {
       check,
       restarted,
       splash: splashOn ? (splashOff ? (splashOff.at - splashOn.at) + " ms" : "never hidden") : "none",
+      // Until the splash covers the screen, it is black (or the previous app).
+      splashAt: splashOn ? splashOn.at - launch.at : null,
       stuck: splashUp && shownInTime,
       slow: !shownInTime,
       shownAfter: shown ? (shown.at - launch.at) + " ms" : "not shown"
     };
   });
 
-  console.log("\n  #  to                        restarted in background        splash          shown after   stuck");
+  console.log("\n  #  to                        restarted in background        splash at  splash          shown after   stuck");
   for (const row of rows) {
     const to = row.check.app.replace(/^org\.webosbrew\./, "").padEnd(25);
     if (row.error) { console.log(`  ${row.check.cycle}  ${to} ${row.error}`); continue; }
-    console.log(`  ${row.check.cycle}  ${to} ${(row.restarted.join(", ") || "-").padEnd(30)} ${row.splash.padEnd(15)} ${row.shownAfter.padEnd(13)} ${row.stuck ? "STUCK" : row.slow ? "slow" : "-"}`);
+    console.log(`  ${row.check.cycle}  ${to} ${(row.restarted.join(", ") || "-").padEnd(30)} ${(row.splashAt === null ? "-" : row.splashAt + " ms").padEnd(10)} ${row.splash.padEnd(15)} ${row.shownAfter.padEnd(13)} ${row.stuck ? "STUCK" : row.slow ? "slow" : "-"}`);
   }
   const counted = rows.filter((row) => !row.error);
   const stuck = counted.filter((row) => row.stuck);
   const withRestart = counted.filter((row) => row.restarted.some((id) => Object.values(APPS).includes(id)));
   const slow = counted.filter((row) => row.slow);
+  // Only splashes that worked: a stuck one first flashes at once.
+  const clean = counted.filter((row) => row.splashAt !== null && !row.stuck).map((row) => row.splashAt).sort((a, b) => a - b);
+  if (clean.length) {
+    console.log(`\n  splash appeared after ${clean[Math.floor(clean.length / 2)]} ms (median of ${clean.length} switches that weren't stuck)`);
+  }
   console.log(`\n  ${stuck.length} of ${counted.length} switches left a splash on screen after the app showed (${slow.length} apps too slow to tell); ` +
     `${withRestart.length} had one of our apps restarted in the background, ` +
     `${stuck.filter((row) => withRestart.includes(row)).length} of the stuck ones among them.`);
