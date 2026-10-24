@@ -21,6 +21,8 @@ third_party/            notices and licences for those binaries
 shared/                 palette, page reset, Luna and page helpers used by every app
 scripts/build-app.js    copies an app and shared/ into the app's build/
 scripts/deploy.sh       package, install and launch an app on the TV
+scripts/render-splashes.js  draw the start splash for each theme background
+scripts/switch-test.js  switch between two apps on the TV and report stuck splashes
 package.json            npm test: the tests of shared/ and every app
 ```
 
@@ -174,9 +176,11 @@ Why a splash stays on screen (found on 2026-10-24; LG's code is in `/usr/lib/qml
 1. The splash webOS shows while an app starts cold (`splashBackground`) is one view with one app id (`views/StarfishImageSplash.qml`). It closes when that app's window opens (`onSurfaceOpened` compares the id), when the app stops, or after 120 s.
 2. After a forced restart of the app manager (see "Why the screensaver hung" below), the window manager is sometimes subscribed to the app manager's `getAppLifeEvents` twice (`ls-monitor -s`: in 8 of 18 restarts), and then handles every `splash` event twice, so `open()` runs twice per launch (two `open, StarfishImageSplash Image path...` lines per launch in the log). With a single subscription it runs once and nothing sticks.
 3. When the splash image is still decoded in Qt's image cache, the first `open()` starts showing it at once. The second `open()` then calls `wiper.skipToClosedLeft()`, whose `onClosed` clears the app id (`if (wiperAppId === splashAppId) splashAppId = ""`, logged as `splashAppId is invalid`), and shows the splash again without an id, so the app's window never closes it.
-4. Our splash is a small 192x108 image, which stays cached for about 30 s after it was last used: by that app's previous splash, or by the window manager starting the app in the background. Full-size 1920x1080 splashes, like Homebrew Channel's and LG's, are not kept.
+4. Our splash was a small 192x108 image, which stays cached for about 30 s after it was last used: by that app's previous splash, or by the window manager starting the app in the background. Full-size 1920x1080 splashes, like Homebrew Channel's and LG's, are not kept.
 
 So a splash sticks when an app starts cold within about 30 s of its splash image last being used. Without Minimal Home on the list, every switch between Home and Departures was a cold start that also restarted the other app in the background, so switching back and forth quickly hit it nearly every time, while leaving an app open for a minute did not. `node scripts/switch-test.js --cold` reproduces it: 8 of 12 switches with today's builds and 5 of 8 with the builds from before themes (`42e4c55`); 0 of 6 with 32 s between switches (`--cold 3 32`); 0 of 24 with a 1920x1080 splash in both apps, and 8 of 12 again with the small one. Without `--cold`, both apps stay running and no splash shows at all. Back to Home also always meant a cold start.
+
+Since 2026-10-24 our splashes are 1280x720, which aren't kept either (`scripts/render-splashes.js` draws one per theme background). With the window manager subscribed twice, `--cold` left a splash on screen in 8 to 9 of 12 switches with a 192x108 or 640x360 splash, and in none with 960x540 (12), 1280x720 (24) or 1920x1080 (36). A larger splash takes a little longer: side by side, the 1280x720 one appeared 592 ms after the launch instead of 543 ms, and the app's window 872 ms instead of 830 ms (medians).
 
 Minimal Home was added to that list on 2026-10-24 with LG's config service, which keeps it as a user override in `/var/preferences/configd_factory_db.json`. `memchute` reads the list when it starts, so it takes effect after a reboot:
 

@@ -25,17 +25,13 @@ test("every preset uses a known background and a palette accent", () => {
   });
 });
 
-// theme.js with fake browser parts: localStorage, the page's style, a canvas for the splash, and
-// WebOS.rootShell answering from `shell` (a function of the command). Retries happen at once.
+// theme.js with fake browser parts: localStorage, the page's style, and WebOS.rootShell answering from
+// `shell` (a function of the command). Retries happen at once.
 function loadTheme(shell, stored) {
   const storage = new Map(Object.entries(stored || {}));
   const set = [];
   global.window = { localStorage: { getItem: (key) => (storage.has(key) ? storage.get(key) : null), setItem: (key, value) => storage.set(key, value) } };
-  const context = { fillRect() {}, save() {}, restore() {}, setTransform() {}, createRadialGradient: () => ({ addColorStop() {} }) };
-  global.document = {
-    documentElement: { style: { setProperty: (name, value) => set.push([name, value]) } },
-    createElement: () => ({ getContext: () => context, toDataURL: () => "data:image/png;base64,UE5H" })
-  };
+  global.document = { documentElement: { style: { setProperty: (name, value) => set.push([name, value]) } } };
   const commands = [];
   global.WebOS = {
     base64: (text) => Buffer.from(text).toString("base64"),
@@ -88,7 +84,7 @@ test("themes chosen during a write are written one at a time, ending with the la
   await Promise.all([first, last]);
   assert.strictEqual(commands.length, 2, "the theme replaced while waiting is never written");
   assert.match(commands[1], new RegExp(Buffer.from(JSON.stringify(Theme.PRESETS[2])).toString("base64").replace(/[+/=]/g, "\\$&")));
-  assert.match(commands[1], /splash\.png\.new && mv .* && for app in org\.webosbrew\.minimalhome org\.webosbrew\.departures; do/);
+  assert.match(commands[1], /cp \S+\/org\.webosbrew\.minimalhome\/splashes\/forest\.png \S+\/splash\.png\.new && mv .* && for app in org\.webosbrew\.minimalhome org\.webosbrew\.departures; do/);
 });
 
 test("a write that fails after its retries is reported, and Home knows to write it again", async () => {

@@ -122,8 +122,10 @@
     var writes = /echo (\S+) \| base64 -d > (\S+)\.new/g;
     var write = writes.exec(command);
     if (write) {
-      // Every file the command writes; a PNG is kept as its base64.
-      for (; write; write = writes.exec(command)) { tv.files[write[2]] = /\.png$/.test(write[2]) ? write[1] : decode(write[1]); }
+      // Every file the command writes; a copied file is kept as the path it came from.
+      for (; write; write = writes.exec(command)) { tv.files[write[2]] = decode(write[1]); }
+      var copies = /cp (\S+) (\S+)\.new/g;
+      for (var copy = copies.exec(command); copy; copy = copies.exec(command)) { tv.files[copy[2]] = { from: copy[1] }; }
       return ["write", ""];
     }
     if (command.indexOf("ln -s / ") >= 0) { return ["iconLink", options().firstStart ? "made\n" : ""]; }

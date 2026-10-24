@@ -127,7 +127,7 @@ BrowserTest.define("the first and last row of every panel follow its rounded cor
   checkPanelCorners(t, "appearance");
 });
 
-BrowserTest.define("sharing a theme also writes a splash in its colours", {}, async (t) => {
+BrowserTest.define("sharing a theme also copies the splash in its background's colours", {}, async (t) => {
   await t.homeReady();
   openAppearance();
   t.key("OK");
@@ -135,19 +135,14 @@ BrowserTest.define("sharing a theme also writes a splash in its colours", {}, as
   t.key("BACK");
   t.key("BACK");
   await t.wait(300);
-  const png = t.tv().files["/home/root/.config/minimal-suite/splash.png"];
-  t.ok(png, "the splash is written when the view closes, without waiting");
+  const splash = t.tv().files["/home/root/.config/minimal-suite/splash.png"];
+  t.ok(splash, "the splash is written when the view closes, without waiting");
+  t.equal(splash.from, "/media/developer/apps/usr/palm/applications/org.webosbrew.minimalhome/splashes/aubergine.png");
+  // The page is Home as installed, so the copied file is here too (its colours: splashes.test.js).
   const image = new Image();
-  image.src = "data:image/png;base64," + png;
+  image.src = "splashes/aubergine.png";
   await image.decode();
-  t.equal([image.width, image.height], [192, 108]);
-  const canvas = document.createElement("canvas");
-  canvas.width = 192;
-  canvas.height = 108;
-  const context = canvas.getContext("2d");
-  context.drawImage(image, 0, 0);
-  const middle = Array.from(context.getImageData(96, 54, 1, 1).data.slice(0, 3));
-  t.equal(middle, [0x15, 0x07, 0x16], "the middle has Aubergine's page colour");
+  t.equal([image.width, image.height], [1280, 720]);
 });
 
 // The test fills localStorage after <head> ran, so it reloads the page once: on the second load the

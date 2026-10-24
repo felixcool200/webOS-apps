@@ -2,22 +2,22 @@
 // the two glows in its corners), set as CSS variables on the page. Loaded in <head>, this file applies
 // the theme this app last used at once, from its own localStorage, so the first frame already has it.
 // Minimal Home's Appearance view chooses the theme and also writes it to FILE (share); other apps call
-// sync() once they have started, to take a theme changed since they last ran. share() also draws the
-// theme's background as SPLASH and copies it over the splash.png of each app in SPLASH_APPS, which
-// webOS shows while that app starts (scripts/deploy.sh copies it in again after an install).
+// sync() once they have started, to take a theme changed since they last ran. share() also copies the
+// splash of the theme's background (from Home's splashes/, made by scripts/render-splashes.js) to SPLASH
+// and over the splash.png of each app in SPLASH_APPS, which webOS shows while that app starts
+// (scripts/deploy.sh copies it in again after an install).
 var Theme = (function () {
   "use strict";
 
   var STORE_KEY = "theme.current";
-  // The theme last written to FILE, so Home can write it again if that failed (isShared).
-  var SHARED_KEY = "theme.shared";
+  // The theme last written to FILE, so Home can write it again if that failed (isShared). Renamed when
+  // the splashes change, so Home writes the new one after an update.
+  var SHARED_KEY = "theme.shared.720p";
   var FILE = "/home/root/.config/minimal-suite/theme.json";
   var SPLASH = "/home/root/.config/minimal-suite/splash.png";
   var APP_DIR = "/media/developer/apps/usr/palm/applications/";
+  var SPLASHES = APP_DIR + "org.webosbrew.minimalhome/splashes/";
   var SPLASH_APPS = ["org.webosbrew.minimalhome", "org.webosbrew.departures"];
-  // webOS stretches the splash to full screen; this size was found to appear soonest (SKILL.md).
-  var SPLASH_WIDTH = 192;
-  var SPLASH_HEIGHT = 108;
   var RETRY_MS = [1000, 3000];
   var ACCENTS = [
     { name: "Sky", color: "#72d6ff" }, { name: "Teal", color: "#5ce1e6" }, { name: "Mint", color: "#7ee2a8" },
@@ -104,33 +104,6 @@ var Theme = (function () {
     apply(theme);
   }
 
-  // An elliptic glow, as CSS radial-gradient(rx ry at x y, color, transparent end) draws it.
-  function glow(context, color, x, y, rx, ry, end) {
-    var gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
-    gradient.addColorStop(0, color);
-    // The same colour, see-through: "transparent" would fade through black.
-    gradient.addColorStop(end, color.replace(/[\d.]+\)$/, "0)"));
-    context.save();
-    context.setTransform(rx, 0, 0, ry, x, y);
-    context.fillStyle = gradient;
-    context.fillRect(-x / rx, -y / ry, SPLASH_WIDTH / rx, SPLASH_HEIGHT / ry);
-    context.restore();
-  }
-
-  // The theme's background as base.css draws it, as a small PNG in base64.
-  function splash(theme) {
-    var background = backgroundOf(theme.background);
-    var canvas = document.createElement("canvas");
-    canvas.width = SPLASH_WIDTH;
-    canvas.height = SPLASH_HEIGHT;
-    var context = canvas.getContext("2d");
-    context.fillStyle = background.bg;
-    context.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-    glow(context, background.glowA, 0.04 * SPLASH_WIDTH, 0, 0.7 * SPLASH_WIDTH, 0.65 * SPLASH_HEIGHT, 0.68);
-    glow(context, background.glowB, SPLASH_WIDTH, SPLASH_HEIGHT, 0.55 * SPLASH_WIDTH, 0.65 * SPLASH_HEIGHT, 0.72);
-    return canvas.toDataURL("image/png").split(",")[1];
-  }
-
   // A shell command that writes base64 data to a file, through a temporary file so readers never
   // see half of it.
   function writeCommand(path, data) {
@@ -146,7 +119,8 @@ var Theme = (function () {
     var theme = waiting;
     waiting = null;
     var command = "mkdir -p " + FILE.replace(/\/[^/]*$/, "") + " && " + writeCommand(FILE, WebOS.base64(JSON.stringify(theme))) +
-      " && " + writeCommand(SPLASH, splash(theme)) + " && for app in " + SPLASH_APPS.join(" ") + "; do " +
+      " && cp " + SPLASHES + backgroundOf(theme.background).id + ".png " + SPLASH + ".new && mv " + SPLASH + ".new " + SPLASH +
+      " && for app in " + SPLASH_APPS.join(" ") + "; do " +
       "if [ -f " + APP_DIR + "$app/splash.png ]; then cp " + SPLASH + " " + APP_DIR + "$app/splash.png || exit 1; fi; done";
     return WebOS.retry(function () { return WebOS.rootShell(command); }, RETRY_MS).then(function () {
       keep(SHARED_KEY, theme);
