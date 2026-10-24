@@ -28,7 +28,6 @@
 #settings-view .panel > .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
 #settings-view .panel > .setting:last-child { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
 #settings-view .panel > .setting:only-child { border-radius: 1.5vh; }
-#settings-view .info-card strong { font-size: 1.75vh; font-weight: 600; }
 #settings-view .setting .value { grid-column: 3; text-align: right; }
 #settings-view .setting.choice-setting .value { grid-column: 2 / 4; }
 #settings-view .setting.is-editing .value.can-decrease::before { content: "‹  "; }
@@ -67,8 +66,10 @@
   background: var(--row-surface);
 }
 
+#settings-view h2 + .info-card { margin-top: 0; }
+
 #settings-view .info-card p {
-  margin: 0.6vh 0 1.2vh;
+  margin: 0 0 1.2vh;
   color: var(--muted);
   font-size: 1.4vh;
   line-height: 1.45;
