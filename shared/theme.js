@@ -1,18 +1,29 @@
 // Shared by every app: colour themes. A theme is an accent colour on a background (the page colour and
 // the two glows in its corners), set as CSS variables on the page. Loaded in <head>, this file applies
 // the theme this app last used at once, from its own localStorage, so the first frame already has it.
-// Minimal Home's Appearance view chooses the theme and also writes it to FILE; other apps call sync()
-// once they have started, to take a theme changed since they last ran.
+// Minimal Home's Appearance view chooses the theme and also writes it to FILE (share); other apps call
+// sync() once they have started, to take a theme changed since they last ran. share() also draws the
+// theme's background as SPLASH and copies it over the splash.png of each app in SPLASH_APPS, which
+// webOS shows while that app starts (scripts/deploy.sh copies it in again after an install).
 var Theme = (function () {
   "use strict";
 
   var STORE_KEY = "theme.current";
+  // The theme last written to FILE, so Home can write it again if that failed (isShared).
+  var SHARED_KEY = "theme.shared";
   var FILE = "/home/root/.config/minimal-suite/theme.json";
+  var SPLASH = "/home/root/.config/minimal-suite/splash.png";
+  var APP_DIR = "/media/developer/apps/usr/palm/applications/";
+  var SPLASH_APPS = ["org.webosbrew.minimalhome", "org.webosbrew.departures"];
+  // webOS stretches the splash to full screen; this size was found to appear soonest (SKILL.md).
+  var SPLASH_WIDTH = 192;
+  var SPLASH_HEIGHT = 108;
+  var RETRY_MS = [1000, 3000];
   var ACCENTS = [
     { name: "Sky", color: "#72d6ff" }, { name: "Teal", color: "#5ce1e6" }, { name: "Mint", color: "#7ee2a8" },
     { name: "Lime", color: "#c5e86c" }, { name: "Sun", color: "#ecb22e" }, { name: "Amber", color: "#ffb072" },
     { name: "Coral", color: "#ff8a7a" }, { name: "Rose", color: "#ff8fb1" }, { name: "Orchid", color: "#e0a6ff" },
-    { name: "Lilac", color: "#a9b4ff" }, { name: "Silver", color: "#d7dce3" }, { name: "White", color: "#f7f9fc" }
+    { name: "Lilac", color: "#a9b4ff" }, { name: "Silver", color: "#d7dce3" }
   ];
   var BACKGROUNDS = [
     { id: "night", name: "Night", bg: "#081017", glowA: "rgba(30, 104, 145, 0.38)", glowB: "rgba(67, 55, 130, 0.28)" },
@@ -69,38 +80,101 @@ var Theme = (function () {
     } catch (error) { return null; }
   }
 
-  // The theme this app last used, or the first preset.
-  function current() {
-    var text = null;
-    try { text = window.localStorage.getItem(STORE_KEY); } catch (error) { text = null; }
-    return parse(text) || PRESETS[0];
+  function read(key) {
+    try { return parse(window.localStorage.getItem(key)); } catch (error) { return null; }
   }
 
-  function remember(theme) {
-    try { window.localStorage.setItem(STORE_KEY, JSON.stringify(theme)); }
+  function keep(key, theme) {
+    try { window.localStorage.setItem(key, JSON.stringify(theme)); }
     catch (error) { console.warn("Could not keep the theme: " + error.message); }
+  }
+
+  function same(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
+  // The theme this app last used, or the first preset.
+  function current() {
+    return read(STORE_KEY) || PRESETS[0];
   }
 
   // Uses a theme in this app from now on.
   function use(theme) {
-    remember(theme);
+    keep(STORE_KEY, theme);
     apply(theme);
   }
 
-  // Writes a theme (as root) where the other apps read it.
+  // An elliptic glow, as CSS radial-gradient(rx ry at x y, color, transparent end) draws it.
+  function glow(context, color, x, y, rx, ry, end) {
+    var gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gradient.addColorStop(0, color);
+    // The same colour, see-through: "transparent" would fade through black.
+    gradient.addColorStop(end, color.replace(/[\d.]+\)$/, "0)"));
+    context.save();
+    context.setTransform(rx, 0, 0, ry, x, y);
+    context.fillStyle = gradient;
+    context.fillRect(-x / rx, -y / ry, SPLASH_WIDTH / rx, SPLASH_HEIGHT / ry);
+    context.restore();
+  }
+
+  // The theme's background as base.css draws it, as a small PNG in base64.
+  function splash(theme) {
+    var background = backgroundOf(theme.background);
+    var canvas = document.createElement("canvas");
+    canvas.width = SPLASH_WIDTH;
+    canvas.height = SPLASH_HEIGHT;
+    var context = canvas.getContext("2d");
+    context.fillStyle = background.bg;
+    context.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
+    glow(context, background.glowA, 0.04 * SPLASH_WIDTH, 0, 0.7 * SPLASH_WIDTH, 0.65 * SPLASH_HEIGHT, 0.68);
+    glow(context, background.glowB, SPLASH_WIDTH, SPLASH_HEIGHT, 0.55 * SPLASH_WIDTH, 0.65 * SPLASH_HEIGHT, 0.72);
+    return canvas.toDataURL("image/png").split(",")[1];
+  }
+
+  // A shell command that writes base64 data to a file, through a temporary file so readers never
+  // see half of it.
+  function writeCommand(path, data) {
+    return "echo " + data + " | base64 -d > " + path + ".new && mv " + path + ".new " + path;
+  }
+
+  // The theme waiting to be written, and the writing going on: one write at a time, and while one runs
+  // only the latest theme waits, so FILE always ends up with the theme chosen last.
+  var waiting = null;
+  var writing = null;
+
+  function writeWaiting() {
+    var theme = waiting;
+    waiting = null;
+    var command = "mkdir -p " + FILE.replace(/\/[^/]*$/, "") + " && " + writeCommand(FILE, WebOS.base64(JSON.stringify(theme))) +
+      " && " + writeCommand(SPLASH, splash(theme)) + " && for app in " + SPLASH_APPS.join(" ") + "; do " +
+      "if [ -f " + APP_DIR + "$app/splash.png ]; then cp " + SPLASH + " " + APP_DIR + "$app/splash.png || exit 1; fi; done";
+    return WebOS.retry(function () { return WebOS.rootShell(command); }, RETRY_MS).then(function () {
+      keep(SHARED_KEY, theme);
+      if (waiting) { return writeWaiting(); }
+      writing = null;
+    }, function (error) {
+      writing = null;
+      throw error;
+    });
+  }
+
+  // Writes a theme (as root) where the other apps read it. The promise settles once it is written.
   function share(theme) {
-    return WebOS.rootShell("mkdir -p " + FILE.replace(/\/[^/]*$/, "") + " && echo " + WebOS.base64(JSON.stringify(theme)) +
-      " | base64 -d > " + FILE + ".new && mv " + FILE + ".new " + FILE);
+    waiting = theme;
+    if (!writing) { writing = writeWaiting(); }
+    return writing;
+  }
+
+  // Whether FILE has the theme in use, as far as this app knows (false after a failed share).
+  function isShared() {
+    return same(read(SHARED_KEY), current());
   }
 
   // Takes the theme from FILE when it differs from the one in use (another app changed it).
   function sync() {
-    return WebOS.rootShell("cat " + FILE + " 2>/dev/null || true").then(function (result) {
+    return WebOS.retry(function () { return WebOS.rootShell("cat " + FILE + " 2>/dev/null || true"); }, RETRY_MS).then(function (result) {
       var shared = parse(result.stdoutString);
-      if (shared && JSON.stringify(shared) !== JSON.stringify(current())) {
-        remember(shared);
-        apply(shared);
-      }
+      if (shared && !same(shared, current())) { use(shared); }
     }).catch(function (error) { console.warn("Could not read the shared theme: " + error.message); });
   }
 
@@ -108,7 +182,7 @@ var Theme = (function () {
 
   return {
     ACCENTS: ACCENTS, BACKGROUNDS: BACKGROUNDS, PRESETS: PRESETS, backgroundOf: backgroundOf, isTheme: isTheme,
-    variables: variables, apply: apply, parse: parse, current: current, use: use, share: share, sync: sync
+    variables: variables, apply: apply, parse: parse, current: current, use: use, share: share, isShared: isShared, sync: sync
   };
 }());
 

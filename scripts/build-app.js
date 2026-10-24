@@ -1,6 +1,6 @@
 // Builds an app into apps/<name>/build/ for packaging: a copy of app/ plus the shared files
-// (base.css, webos.js, ui.js and splash.png for appinfo.json's splashBackground). index.html loads the
-// shared files before the app's own. Usage: node scripts/build-app.js apps/<name>
+// (base.css, webos.js, ui.js, theme.js, and splash.png for appinfo.json's splashBackground). index.html
+// loads the shared files before the app's own. Usage: node scripts/build-app.js apps/<name>
 "use strict";
 
 const fs = require("fs");

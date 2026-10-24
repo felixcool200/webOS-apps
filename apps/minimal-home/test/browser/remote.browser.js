@@ -86,3 +86,25 @@ BrowserTest.define("a test disables every button and stops after three quick pre
   t.equal(t.text("#remote-test"), "Test remote", "stopped after the third");
   t.equal(JSON.parse(t.tv().files[CONFIG]), { "1038": { action: "ignore" } }, "the real bindings are back");
 });
+
+// The first write is Home sharing its theme at start; the second is the change saved on leaving.
+BrowserTest.define("a test started before the bindings were read leaves them read afterwards", {
+  tv: { delays: { write: [20, 1500] } }
+}, async (t) => {
+  await t.homeReady();
+  openRemote();
+  await t.wait(800);
+  t.key("OK");
+  t.key("RIGHT");
+  t.key("OK");
+  document.dispatchEvent(new CustomEvent("webOSRelaunch", { detail: { view: "settings" } }));
+  openRemote();
+  t.$("#remote-test").click();
+  await t.wait(2500);
+  t.equal(t.text("#remote-test"), "Stop test");
+  t.$("#remote-test").click();
+  await t.wait(1500);
+  const row = t.$("#remote-list .setting");
+  row.click();
+  t.ok(row.classList.contains("is-editing"), "a row can be changed again: " + t.text("#remote-status"));
+});

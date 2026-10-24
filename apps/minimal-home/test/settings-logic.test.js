@@ -26,14 +26,16 @@ test("stepping a setting stays within its range or list", () => {
 });
 
 const SPECS = {
-  pictureMode: { kind: "choice" }, backlight: { kind: "range", min: 0, max: 100, step: 5 },
-  energySaving: { kind: "choice" }, soundMode: { kind: "choice" }, quickStartMode: { kind: "choice", order: ["off", "on"] }
+  pictureMode: { category: "picture", kind: "choice" }, backlight: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
+  energySaving: { category: "picture", kind: "choice" }, soundMode: { category: "sound", kind: "choice" },
+  quickStartMode: { category: "option", kind: "choice", order: ["off", "on"] }, wifiEnabled: { category: "network", kind: "choice" }
 };
 const CHOICES = ["pictureMode", "energySaving", "soundMode", "quickStartMode"];
 const values = (...list) => ({ values: { arrayExt: list.map((value) => ({ value })) } });
 const replies = () => [
   { settings: { pictureMode: "normal", backlight: "100", energySaving: "auto" } }, { settings: { soundMode: "standard" } },
-  { settings: { quickStartMode: "on" } }, values("normal", "vivid"), values("auto", "off"), values("standard", "movie"), values("on", "off")
+  { settings: { quickStartMode: "on" } }, values("normal", "vivid"), values("auto", "off"), values("standard", "movie"), values("on", "off"),
+  { wifi: { state: "connected" } }, { status: "connectionStateChanged" }
 ];
 
 test("a load fills in values and the choices on offer, with ranges as numbers", () => {
@@ -63,4 +65,31 @@ test("a setting changed while a load ran keeps its new value", () => {
   assert.strictEqual(state.backlight.value, 80);
   assert.strictEqual(state.pictureMode.value, "normal");
   assert.strictEqual(before.backlight.value, 80, "the old state isn't changed in place");
+});
+
+test("a load reads each category's settings, and the network replies after the choices however many there are", () => {
+  assert.deepStrictEqual(SettingsLogic.READ_CATEGORIES.map((category) => SettingsLogic.keysIn(SPECS, category)),
+    [["pictureMode", "backlight", "energySaving"], ["soundMode"], ["quickStartMode"]]);
+  const read = replies();
+  read.splice(7, 0, values("x", "y"));
+  const fiveChoices = CHOICES.concat(["backlight"]);
+  const { network } = SettingsLogic.applyReadings(Object.assign({}, SPECS, { backlight: SPECS.pictureMode }), {}, read, {}, fiveChoices);
+  assert.deepStrictEqual(network, { connection: { wifi: { state: "connected" } }, wifi: { status: "connectionStateChanged" } });
+});
+
+test("a failed network read shows nothing new and counts as a failure, rather than Wi-Fi Off", () => {
+  const read = replies();
+  read[7] = new Error("No reply");
+  const { network, failed } = SettingsLogic.applyReadings(SPECS, {}, read, {}, CHOICES);
+  assert.strictEqual(network, null);
+  assert.match(failed.message, /No reply/);
+});
+
+test("a failed read of the choices on offer keeps the ones known from before", () => {
+  const before = SettingsLogic.applyReadings(SPECS, {}, replies(), {}, CHOICES).state;
+  const read = replies();
+  read[4] = new Error("Timed out");
+  const { state } = SettingsLogic.applyReadings(SPECS, before, read, {}, CHOICES);
+  assert.deepStrictEqual(state.energySaving.values, ["auto", "off"]);
+  assert.strictEqual(SettingsLogic.nextValue(SPECS.energySaving, state.energySaving, 1), "off", "Right still changes it");
 });

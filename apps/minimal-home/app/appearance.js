@@ -2,7 +2,8 @@
 // Theme steps through the presets and your own themes, shown as cards beside the rows. Accent and
 // Background change the theme; for a preset that makes a theme of your own from it
 // (AppearanceLogic.withChange). Every change shows at once and is shared with the other apps
-// SHARE_DELAY_MS after the last one. Home shows #appearance-view and routes keys and pointer movement here.
+// SHARE_DELAY_MS after the last one, or when the view closes. Home shows #appearance-view and routes keys
+// and pointer movement here.
 var Appearance = (function () {
   "use strict";
 
@@ -65,11 +66,23 @@ var Appearance = (function () {
     $("appearance-accent").querySelector(".value").textContent = accentName(theme.accent);
     $("appearance-background").querySelector(".value").textContent = Theme.backgroundOf(theme.background).name;
     $("appearance-delete").hidden = !isOwn(theme);
+    var shown = rows();
+    shown.forEach(function (row, index) { row.classList.toggle("is-last", index === shown.length - 1); });
     $("appearance-delete").querySelector(".value").textContent = confirmingDelete ? "OK again deletes it" : "";
     var cards = $("appearance-themes");
     cards.textContent = "";
     choices().forEach(function (choice) { cards.appendChild(themeCard(choice)); });
+    var current = cards.querySelector(".is-current");
+    // With room for its ring, 0.35vh wide.
+    if (current) { UI.keepInView(current, Math.ceil(window.innerHeight * 0.005)); }
     host.setLinkValue("appearance", theme.name);
+  }
+
+  // Writes the theme for the other apps. Failing that, the next start of Home tries again (preload).
+  function share() {
+    window.clearTimeout(shareTimer);
+    shareTimer = null;
+    Theme.share(theme).catch(function (error) { setStatus("Could not share the theme: " + error.message, "error"); });
   }
 
   // Shows a theme at once and keeps it; the other apps get it once the changes stop.
@@ -78,9 +91,7 @@ var Appearance = (function () {
     Theme.use(theme);
     show();
     window.clearTimeout(shareTimer);
-    shareTimer = window.setTimeout(function () {
-      Theme.share(theme).catch(function (error) { setStatus("Could not share the theme: " + error.message, "error"); });
-    }, SHARE_DELAY_MS);
+    shareTimer = window.setTimeout(share, SHARE_DELAY_MS);
   }
 
   function saveCustoms() {
@@ -215,7 +226,13 @@ var Appearance = (function () {
   function close() {
     stopEditing();
     confirmingDelete = false;
+    if (shareTimer) { share(); }
   }
 
-  return { attach: attach, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
+  // In the background after Home starts: writes the theme again if the last write failed.
+  function preload() {
+    if (!Theme.isShared()) { share(); }
+  }
+
+  return { attach: attach, preload: preload, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
 }());

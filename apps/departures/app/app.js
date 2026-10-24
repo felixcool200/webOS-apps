@@ -134,7 +134,9 @@
   function tick() {
     var now = stockholmNow();
     var cells = document.querySelectorAll(".time[data-at]");
-    document.getElementById("clock").textContent = clockText(now);
+    var clock = document.getElementById("clock");
+    var text = clockText(now);
+    if (clock.textContent !== text) { clock.textContent = text; }
     for (var i = 0; i < cells.length; i += 1) {
       fillTime(cells[i], +cells[i].getAttribute("data-at"), now);
     }

@@ -21,8 +21,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* The last row shown (Delete this theme is hidden for presets) is marked .is-last by appearance.js. */
 #appearance-view .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
-#appearance-view .setting:last-of-type { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+#appearance-view .setting.is-last { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
 #appearance-view .setting.is-editing .value::before { content: "‹  "; }
 #appearance-view .setting.is-editing .value::after { content: "  ›"; }
 #appearance-delete .value { color: var(--error); }
@@ -30,7 +31,12 @@
 .appearance-side { flex: 1; min-width: 0; }
 
 /* Every theme on offer, the one in use outlined. */
+/* At most four lines show; the one with the theme in use is scrolled into view. */
 #appearance-themes {
+  position: relative;
+  max-height: calc(4 * 10.5vh + 3 * 1.4vh + 2 * 0.5vh);
+  padding: 0.5vh;
+  overflow: hidden;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.4vh 1vw;

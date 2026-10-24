@@ -119,9 +119,11 @@
 
   // The reply to a Homebrew Channel exec command, and the name used for its timing.
   function execReply(command) {
-    var write = /echo (\S+) \| base64 -d > (\S+)\.new/.exec(command);
+    var writes = /echo (\S+) \| base64 -d > (\S+)\.new/g;
+    var write = writes.exec(command);
     if (write) {
-      tv.files[write[2]] = decode(write[1]);
+      // Every file the command writes; a PNG is kept as its base64.
+      for (; write; write = writes.exec(command)) { tv.files[write[2]] = /\.png$/.test(write[2]) ? write[1] : decode(write[1]); }
       return ["write", ""];
     }
     if (command.indexOf("ln -s / ") >= 0) { return ["iconLink", options().firstStart ? "made\n" : ""]; }

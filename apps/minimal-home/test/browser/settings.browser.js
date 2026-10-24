@@ -51,3 +51,25 @@ BrowserTest.define("Settings reads everything in one root call when it opens", {
   const made = t.tv().calls.slice(before).map((call) => call[0]);
   t.equal(made, ["settings"]);
 });
+
+BrowserTest.define("reopening Settings during a write doesn't let the older reading undo it", {
+  tv: { delays: { luna: [600, 20], settings: [20, 20, 1500] } }
+}, async (t) => {
+  await t.homeReady();
+  await t.until(() => t.tv().counts.settings >= 1, 4000, "the reading at start");
+  await t.wait(200);
+  document.dispatchEvent(new CustomEvent("webOSRelaunch", { detail: { view: "settings" } }));
+  await t.until(() => t.tv().counts.settings >= 2, 2000, "the reading on open");
+  await t.wait(200);
+  t.key("DOWN");
+  t.key("OK");
+  t.key("RIGHT");
+  t.key("BACK");
+  t.key("BACK");
+  t.equal(t.view(), "home");
+  document.dispatchEvent(new CustomEvent("webOSRelaunch", { detail: { view: "settings" } }));
+  await t.until(() => t.tv().counts.settings >= 3, 2000, "the reading on reopening");
+  await t.wait(2200);
+  t.equal(t.tv().written, [["backlight", 85]]);
+  t.equal(t.text('[data-setting="backlight"] .value'), "85", "the new value stays");
+});

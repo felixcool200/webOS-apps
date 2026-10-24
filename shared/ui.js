@@ -18,12 +18,14 @@ var UI = (function () {
     return to;
   }
 
-  // Scrolls the element's parent just enough to show all of the element (offsets are relative to the
-  // parent, which must be its scrolling container).
-  function keepInView(element) {
+  // Scrolls the element's parent just enough to show all of the element, and `margin` pixels around
+  // it, such as room for a focus ring (offsets are relative to the parent, which must be its
+  // scrolling container).
+  function keepInView(element, margin) {
     var list = element.parentNode;
-    var bottom = element.offsetTop + element.offsetHeight;
-    if (element.offsetTop < list.scrollTop) { list.scrollTop = element.offsetTop; }
+    var top = element.offsetTop - (margin || 0);
+    var bottom = element.offsetTop + element.offsetHeight + (margin || 0);
+    if (top < list.scrollTop) { list.scrollTop = top; }
     else if (bottom > list.scrollTop + list.clientHeight) { list.scrollTop = bottom - list.clientHeight; }
   }
 

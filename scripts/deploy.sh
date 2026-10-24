@@ -32,6 +32,14 @@ echo "Packaging $id $version"
 (cd "$app_dir" && { [ -d node_modules ] || npm install; } && npm run --silent package)
 [ -f "$app_dir/dist/$ipk" ] || { echo "Expected $app_dir/dist/$ipk was not built" >&2; exit 1; }
 
+# With the version already installed, the install check below would pass before the install ran.
+installed_version=$(tv "luna-send -n 1 -f 'luna://com.webos.service.applicationmanager/getAppInfo' '{\"id\":\"$id\"}'" |
+  sed -n 's/.*"version": "\([^"]*\)".*/\1/p' | head -n 1)
+if [ "$installed_version" = "$version" ]; then
+  echo "$id $version is already installed; bump the version in package.json and app/appinfo.json" >&2
+  exit 1
+fi
+
 home_redirect=0
 uploaded=0
 # If anything fails from here on, put the Home redirect back and remove the upload, so the Home key
@@ -84,6 +92,17 @@ if [ "$installed" != 1 ]; then
   exit 1
 fi
 echo "Installed $id $version"
+
+# The install brought back the default splash; put the one in the theme's colours over it (shared/theme.js).
+tv "if [ -f /home/root/.config/minimal-suite/splash.png ] && [ -f /media/developer/apps/usr/palm/applications/$id/splash.png ]; then \
+  cp /home/root/.config/minimal-suite/splash.png /media/developer/apps/usr/palm/applications/$id/splash.png; fi"
+
+# The boot scripts run copies in init.d (made by use-minimal-home.sh and use-remote-buttons.sh); bring
+# the remote buttons' copy up to date. Home's is refreshed below.
+if [ "$id" = org.webosbrew.minimalhome ]; then
+  tv "if [ -f /var/lib/webosbrew/init.d/60-remote-buttons ]; then \
+    cp /media/developer/apps/usr/palm/applications/$id/remote-hook/load-remote-hook.sh /var/lib/webosbrew/init.d/60-remote-buttons; fi"
+fi
 
 # Restarting the app manager can leave LG's screensaver hanging, so it only happens when the stub it
 # reads has changed.

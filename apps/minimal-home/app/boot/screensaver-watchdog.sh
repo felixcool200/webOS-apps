@@ -23,8 +23,8 @@ unstick() {
   case "$state" in *'"Screen Saver Ready"'*) ;; *) return ;; esac
   echo "$(date) stuck: $state" >> "$LOG"
   luna-send -n 1 luna://com.webos.service.applicationmanager/closeByAppId '{"id":"com.webos.app.screensaver"}' </dev/null >> "$LOG" 2>&1
-  sleep 5
-  echo "$(date) after closing: $(luna-send -n 1 "$POWER" '{}' </dev/null)" >> "$LOG"
+  # In the background, so this timer has ended when the next state arrives.
+  (sleep 5; echo "$(date) after closing: $(luna-send -n 1 "$POWER" '{}' </dev/null)" >> "$LOG") &
 }
 
 # Every change of the power state arrives as one line. A timer starts when tvpowerd begins waiting
@@ -32,6 +32,8 @@ unstick() {
 while :; do
   timer=
   luna-send -i "$POWER" '{"subscribe":true}' </dev/null | while read -r reply; do
+    # A timer that has run out (and closed the screensaver) no longer counts.
+    if [ -n "$timer" ] && ! kill -0 "$timer" 2>/dev/null; then timer=; fi
     case "$reply" in
       *'"Screen Saver Ready"'*)
         if [ -z "$timer" ]; then

@@ -252,8 +252,11 @@
     status.textContent = installed.length ? "" : "No apps found";
     if (view !== "home") { return; }
     var focus = (focusId || pickedId) && document.querySelector('#home-view [data-app-id="' + (focusId || pickedId) + '"]');
-    // A button outside the grid (Sources, Settings) keeps the focus.
-    if (!focus && selected && selected.isConnected && !selected.getAttribute("data-app-id")) { focus = selected; }
+    // A button outside the grid (Sources, Settings) keeps the focus, and so does the Hidden apps tile,
+    // which was made anew.
+    if (!focus && selected && !selected.getAttribute("data-app-id")) {
+      focus = selected.isConnected ? selected : selected.id && document.getElementById(selected.id);
+    }
     setFocus(focus || document.querySelector("#apps .focusable") || document.querySelector("#home-view .focusable"));
   }
 

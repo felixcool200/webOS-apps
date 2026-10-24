@@ -135,7 +135,7 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
   align-items: center;
   justify-content: center;
   color: white;
-  background: linear-gradient(135deg, #1876a3, #5451a8);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.55), rgba(var(--accent-rgb), 0.18));
   font-size: 3.4vh;
   font-weight: 700;
 }

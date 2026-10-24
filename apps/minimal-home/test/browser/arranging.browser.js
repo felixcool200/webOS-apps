@@ -99,3 +99,14 @@ BrowserTest.define("Up from the top line reaches the Sources button, and Down co
   t.key("DOWN");
   t.ok(t.focused().getAttribute("data-app-id"), "back on a tile");
 });
+
+BrowserTest.define("the Hidden apps tile keeps the focus when the TV's app list arrives", {
+  tv: { delays: { listApps: 3000 } },
+  storage: { "home.appList": [{ id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" }], "home.hiddenApps": ["netflix"] }
+}, async (t) => {
+  await t.until(() => t.$("#hidden-tile"), 500, "the Hidden apps tile");
+  t.key("DOWN");
+  t.equal(t.focused().id, "hidden-tile");
+  await t.until(() => t.$$("#apps .app").length > 1, 5000, "the TV's list");
+  t.equal(t.focused() && t.focused().id, "hidden-tile", "still on the new Hidden apps tile");
+});

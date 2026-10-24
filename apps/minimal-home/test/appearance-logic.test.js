@@ -47,3 +47,9 @@ test("saved themes of your own are read back without broken ones", () => {
   assert.strictEqual(AppearanceLogic.parseCustoms(saved, Theme.isTheme).length, 1);
   assert.deepStrictEqual(AppearanceLogic.parseCustoms("{oops", Theme.isTheme), []);
 });
+
+test("saved themes of your own can't pass for a preset or appear twice", () => {
+  const own = { id: "custom-1", name: "Custom 1", accent: "#ff8fb1", background: "night" };
+  const saved = JSON.stringify([own, Object.assign({}, own, { name: "Again" }), Object.assign({}, own, { id: "night" })]);
+  assert.deepStrictEqual(AppearanceLogic.parseCustoms(saved, Theme.isTheme), [own]);
+});

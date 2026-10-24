@@ -518,6 +518,9 @@ var RemoteButtons = (function () {
     setStatus(message);
     return queue(function () {
       return Promise.resolve(flush()).then(restore);
+    }).then(function () {
+      // A read skipped because the test started first (open() queues one) happens now.
+      if (!fresh && !listening && !readError) { return load().then(render); }
     });
   }
 
@@ -947,6 +950,8 @@ var RemoteButtons = (function () {
     // Show the bindings read at Home's start straight away (they can't be changed until read again).
     render();
     load().then(function () {
+      // Skipped while a test runs; stopListening reads them afterwards.
+      if (listening) { return; }
       render();
       if (readError) { setStatus("Could not read the bindings (" + readError + ") · reopen this page to retry", "error"); }
       else if (!hooked) { setStatus(NO_HOOK, "error"); }

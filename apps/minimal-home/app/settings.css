@@ -26,6 +26,7 @@
 #settings-view .setting:last-child { border-bottom: 0; }
 #settings-view .panel > .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
 #settings-view .panel > .setting:last-child { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+#settings-view .panel > .setting:only-child { border-radius: 1.5vh; }
 #settings-view .info-card strong { font-size: 1.75vh; font-weight: 600; }
 #settings-view .setting .value { grid-column: 3; text-align: right; }
 #settings-view .setting.choice-setting .value { grid-column: 2 / 4; }

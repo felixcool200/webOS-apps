@@ -15,7 +15,8 @@ var MinimalSettings = (function () {
   // while it ran are left as changed.
   var loadRun = 0;
   var touched = {};
-  var busy = false;
+  // The setting being written (one at a time).
+  var writing = null;
   var ready = false;
   var loaded = false;
 
@@ -116,18 +117,18 @@ var MinimalSettings = (function () {
 
   var CHOICE_KEYS = ["pictureMode", "energySaving", "soundMode", "quickStartMode"];
 
-  // Reads every value and the choices on offer in one root call. A read that fails only leaves its
-  // own settings as they were.
+  // Reads every value and the choices on offer in one root call, in the order applyReadings expects. A
+  // read that fails only leaves its own settings as they were.
   function load() {
     if (!loaded) { setStatus("Reading current settings…"); }
     var run = loadRun += 1;
+    // A setting still being written keeps its new value, whatever this load reads.
     touched = {};
+    if (writing) { touched[writing] = true; }
     var settings = "luna://com.webos.settingsservice/";
-    return WebOS.rootLunaBatch([
-      [settings + "getSystemSettings", { category: "picture", keys: ["pictureMode", "backlight", "brightness", "contrast", "colorTemperature", "energySaving"] }],
-      [settings + "getSystemSettings", { category: "sound", keys: ["soundMode"] }],
-      [settings + "getSystemSettings", { category: "option", keys: ["quickStartMode"] }]
-    ].concat(CHOICE_KEYS.map(function (key) {
+    return WebOS.rootLunaBatch(SettingsLogic.READ_CATEGORIES.map(function (category) {
+      return [settings + "getSystemSettings", { category: category, keys: SettingsLogic.keysIn(SPECS, category) }];
+    }).concat(CHOICE_KEYS.map(function (key) {
       return [settings + "getSystemSettingValues", { category: SPECS[key].category, key: key }];
     }), [
       ["luna://com.webos.service.connectionmanager/getstatus", {}],
@@ -137,7 +138,7 @@ var MinimalSettings = (function () {
       var applied = SettingsLogic.applyReadings(SPECS, state, results, touched, CHOICE_KEYS);
       state = applied.state;
       loaded = true;
-      renderNetwork(results[7] instanceof Error ? null : results[7], results[8] instanceof Error ? null : results[8]);
+      if (applied.network) { renderNetwork(applied.network.connection, applied.network.wifi); }
       Object.keys(SPECS).forEach(renderSetting);
       var failed = applied.failed;
       if (failed) { setStatus("Could not read some settings: " + failed.message, "error"); }
@@ -164,8 +165,8 @@ var MinimalSettings = (function () {
   }
 
   function writeSetting(key, value) {
-    if (busy || value === undefined || value === state[key].value) { return; }
-    busy = true;
+    if (writing || value === undefined || value === state[key].value) { return; }
+    writing = key;
     touched[key] = true;
     var spec = SPECS[key];
     var element = elementFor(key);
@@ -196,7 +197,7 @@ var MinimalSettings = (function () {
     }).catch(function (error) {
       setStatus("Could not change setting: " + error.message, "error");
     }).then(function () {
-      busy = false;
+      writing = null;
       element.classList.remove("is-busy");
     });
   }

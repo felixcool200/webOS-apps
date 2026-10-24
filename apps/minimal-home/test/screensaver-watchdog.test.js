@@ -60,6 +60,15 @@ test("a screensaver that tvpowerd stays waiting for is closed once, and the stat
   } finally { stop(child); }
 });
 
+test("after closing a stuck screensaver, the next stuck one is closed too", async () => {
+  const dir = setUp([READY, "sleep 1.2", READY], READY);
+  const child = start(dir);
+  try {
+    await wait(2500);
+    assert.deepStrictEqual(calls(dir), ["closed", "closed"]);
+  } finally { stop(child); }
+});
+
 test("a screensaver that starts normally is left alone", async () => {
   const dir = setUp([READY, "sleep 0.1", SAVER], SAVER);
   const child = start(dir);

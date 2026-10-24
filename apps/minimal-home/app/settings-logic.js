@@ -30,16 +30,24 @@ var SettingsLogic = (function () {
     return values[Math.max(0, Math.min(values.length - 1, index + direction))];
   }
 
-  // Puts what one load read into the settings' state, and returns { state, failed }. `replies` are the
-  // load's replies in order: the picture, sound and option settings, then the values on offer for each
-  // of `choiceKeys`; an Error stands for a read that failed and leaves its settings as they were.
-  // Settings changed while the load ran (`touched`) keep their new value. Ranges are kept as numbers,
-  // although the TV reports them as text.
+  // The settings a load reads per category, in the order of READ_CATEGORIES.
+  var READ_CATEGORIES = ["picture", "sound", "option"];
+
+  function keysIn(specs, category) {
+    return Object.keys(specs).filter(function (key) { return specs[key].category === category; });
+  }
+
+  // Puts what one load read into the settings' state, and returns { state, network, failed }.
+  // `replies` are the load's replies in order: one per READ_CATEGORIES, then the values on offer for
+  // each of `choiceKeys`, then connectionmanager's and wifi's status. An Error stands for a read that
+  // failed: it leaves its settings, and the choices known before, as they were, and `network` is null
+  // unless both network reads worked. Settings changed while the load ran (`touched`) keep their new
+  // value. Ranges are kept as numbers, although the TV reports them as text.
   function applyReadings(specs, state, replies, touched, choiceKeys) {
     var next = {};
     Object.keys(state).forEach(function (key) { next[key] = Object.assign({}, state[key]); });
     function reply(index) { return replies[index] instanceof Error ? null : replies[index]; }
-    [0, 1, 2].forEach(function (index) {
+    READ_CATEGORIES.forEach(function (category, index) {
       var read = (reply(index) && reply(index).settings) || {};
       Object.keys(read).forEach(function (key) {
         if (touched[key]) { return; }
@@ -47,14 +55,21 @@ var SettingsLogic = (function () {
         next[key] = Object.assign({}, next[key], { value: value });
       });
     });
+    var valuesAt = READ_CATEGORIES.length;
     choiceKeys.forEach(function (key, index) {
-      if (next[key]) { next[key].values = allowedValues(reply(3 + index), next[key].value, specs[key].order); }
+      if (!next[key]) { return; }
+      var known = next[key].values;
+      next[key].values = reply(valuesAt + index) || !known ? allowedValues(reply(valuesAt + index), next[key].value, specs[key].order) :
+        (known.indexOf(next[key].value) >= 0 ? known : [next[key].value].concat(known));
     });
-    var failed = replies.slice(0, 3 + choiceKeys.length).filter(function (result) { return result instanceof Error; })[0] || null;
-    return { state: next, failed: failed };
+    var networkAt = valuesAt + choiceKeys.length;
+    var connection = reply(networkAt);
+    var wifi = reply(networkAt + 1);
+    var failed = replies.filter(function (result) { return result instanceof Error; })[0] || null;
+    return { state: next, network: connection && wifi ? { connection: connection, wifi: wifi } : null, failed: failed };
   }
 
-  return { allowedValues: allowedValues, nextValue: nextValue, applyReadings: applyReadings };
+  return { READ_CATEGORIES: READ_CATEGORIES, keysIn: keysIn, allowedValues: allowedValues, nextValue: nextValue, applyReadings: applyReadings };
 }());
 
 if (typeof module !== "undefined") { module.exports = SettingsLogic; }

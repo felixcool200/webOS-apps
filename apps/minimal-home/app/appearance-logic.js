@@ -27,15 +27,23 @@ var AppearanceLogic = (function () {
     return { customs: customs.concat([changed]), theme: changed };
   }
 
+  // Your own themes without the one with this id.
   function withoutTheme(customs, id) {
     return customs.filter(function (own) { return own.id !== id; });
   }
 
-  // Your own themes as saved (JSON text), without broken entries.
+  // Your own themes as saved (JSON text), without broken entries and without any whose id isn't
+  // "custom-N" or comes twice, so none can pass for a preset or hide another.
   function parseCustoms(text, isTheme) {
     var list;
     try { list = JSON.parse(text); } catch (error) { return []; }
-    return Array.isArray(list) ? list.filter(isTheme) : [];
+    if (!Array.isArray(list)) { return []; }
+    var seen = {};
+    return list.filter(function (own) {
+      if (!isTheme(own) || !/^custom-\d+$/.test(own.id) || seen[own.id]) { return false; }
+      seen[own.id] = true;
+      return true;
+    });
   }
 
   return { step: step, withChange: withChange, withoutTheme: withoutTheme, parseCustoms: parseCustoms };
