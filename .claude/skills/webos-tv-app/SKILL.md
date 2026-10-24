@@ -80,6 +80,7 @@ A view is a `<main id="NAME-view" hidden>` in `apps/minimal-home/app/index.html`
 - `attach(host)` runs once at start. `host.navigate(view)` switches views, `host.apps()` is the installed apps, and `host.setLinkValue(view, text)` shows a summary on a Settings row that leads to a view. Such a row is a Settings button with `data-view="NAME"`.
 - `open()` and `close()` run when the view is shown and left; `close()` must leave nothing running.
 - `handleKey(event)` gets every key while the view is shown and returns `"leave"` for Back to go to the view's `back`. `handlePointer(event)` gets pointer movement.
+- A new Settings page (Picture, Sound…) needs no module of its own: its rows go in `PAGES` in `settings-specs.js` and `SettingsPage.create("NAME")` runs it (Minimal Home's README, "Settings view").
 - Settings-style views use `class="panel-view"`, which brings the shared header, rows, focus, footer and status styles from `style.css` and keeps the clock in place. Rows use OK to start changing a value and Left/Right to change it, with the footer hints `Arrows Move · OK Select · Back …` and, while changing, `Left/Right Change · OK Done · Back Done`.
 
 ## Deploy

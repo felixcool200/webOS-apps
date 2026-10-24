@@ -148,36 +148,32 @@
 
     <div class="columns">
       <section>
-        <h2>Picture</h2>
+        <h2>Quick</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="pictureMode" data-nav-right="soundMode" type="button">
-            <span class="copy"><strong>Picture mode</strong><small>Current input and signal</small></span>
+          <button class="setting choice-setting focusable" data-setting="pictureMode" data-nav-right="pictureLink" type="button">
+            <span class="copy"><strong>Picture mode</strong><small>Input that played last</small></span>
             <span class="value">Loading…</span>
           </button>
           <button class="setting focusable" data-setting="backlight" data-nav-right="quickStartMode" type="button">
             <span class="copy"><strong>Panel brightness</strong><small>Light output</small></span>
             <span class="range"><i></i></span><span class="value">—</span>
           </button>
-          <button class="setting focusable" data-setting="brightness" data-nav-right="remoteButtons" type="button">
-            <span class="copy"><strong>Black level</strong><small>Shadow detail</small></span>
-            <span class="range"><i></i></span><span class="value">—</span>
-          </button>
-          <button class="setting focusable" data-setting="contrast" data-nav-right="wifiEnabled" type="button">
-            <span class="copy"><strong>Contrast</strong><small>White level</small></span>
-            <span class="range"><i></i></span><span class="value">—</span>
-          </button>
-          <button class="setting focusable" data-setting="colorTemperature" data-nav-right="advanced" type="button">
-            <span class="copy"><strong>Colour temperature</strong><small>Cooler or warmer whites</small></span>
-            <span class="range"><i></i></span><span class="value">—</span>
-          </button>
-          <button class="setting choice-setting focusable" data-setting="energySaving" data-nav-right="advanced" type="button">
+          <button class="setting choice-setting focusable" data-setting="energySaving" data-nav-right="wifiEnabled" type="button">
             <span class="copy"><strong>Energy saving</strong><small>Automatic panel dimming</small></span>
+            <span class="value">Loading…</span>
+          </button>
+          <button class="setting choice-setting focusable" data-setting="soundMode" data-nav-right="wifiEnabled" type="button">
+            <span class="copy"><strong>Sound mode</strong><small>Applies to the current output</small></span>
             <span class="value">Loading…</span>
           </button>
         </div>
 
-        <h2 class="section-gap">Apps</h2>
+        <h2 class="section-gap">Minimal Home</h2>
         <div class="panel">
+          <button class="setting choice-setting focusable" id="remoteButtons" data-view="remote" data-nav-right="advanced" type="button">
+            <span class="copy"><strong>Remote buttons</strong><small>Disable or reassign remote buttons</small></span>
+            <span class="value">—</span>
+          </button>
           <button class="setting choice-setting focusable" id="appearanceLink" data-view="appearance" data-nav-right="advanced" type="button">
             <span class="copy"><strong>Appearance</strong><small>Colour theme of Home and the other apps</small></span>
             <span class="value">—</span>
@@ -186,25 +182,21 @@
       </section>
 
       <section>
-        <h2>Sound and system</h2>
+        <h2>All settings</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="soundMode" data-nav-left="pictureMode" type="button">
-            <span class="copy"><strong>Sound mode</strong><small>Applies to the current output</small></span>
-            <span class="value">Loading…</span>
-          </button>
-          <button class="setting choice-setting focusable" data-setting="quickStartMode" data-nav-left="backlight" type="button">
-            <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
-            <span class="value">Loading…</span>
-          </button>
-          <button class="setting choice-setting focusable" id="remoteButtons" data-view="remote" data-nav-left="brightness" type="button">
-            <span class="copy"><strong>Remote buttons</strong><small>Disable or reassign remote buttons</small></span>
+          <button class="setting choice-setting focusable" id="pictureLink" data-view="picture" data-nav-left="pictureMode" type="button">
+            <span class="copy"><strong>Picture</strong><small>Brightness, colour, clarity, per input</small></span>
             <span class="value">—</span>
           </button>
         </div>
 
-        <h2 class="section-gap">Network</h2>
+        <h2 class="section-gap">System and network</h2>
         <div class="panel">
-          <button class="setting choice-setting focusable" data-setting="wifiEnabled" data-nav-left="contrast" type="button">
+          <button class="setting choice-setting focusable" data-setting="quickStartMode" data-nav-left="backlight" type="button">
+            <span class="copy"><strong>Quick Start+</strong><small>Faster wake-up, higher standby use</small></span>
+            <span class="value">Loading…</span>
+          </button>
+          <button class="setting choice-setting focusable" data-setting="wifiEnabled" data-nav-left="energySaving" type="button">
             <span class="copy"><strong>Wi-Fi</strong><small id="wifi-detail">Reading network status…</small></span>
             <span class="value">Loading…</span>
           </button>
@@ -229,14 +221,31 @@
       <span id="settings-status" class="status">Reading current settings…</span>
     </footer>
   </main>
+
+  <!-- A Settings page: settings-page.js makes its list and card on the first open. -->
+  <main id="picture-view" class="panel-view settings-page" hidden>
+    <header>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Picture</p>
+    </header>
+    <div class="page-body"></div>
+    <footer>
+      <span class="move-hint"><b>Arrows</b> Move</span>
+      <span class="select-hint"><b>OK</b> Select</span>
+      <span class="back-hint"><b>Back</b> Settings</span>
+      <span id="picture-status" class="status"></span>
+    </footer>
+  </main>
   <script src="webos.js"></script>
   <script src="ui.js"></script>
   <script src="home-logic.js"></script>
+  <script src="settings-specs.js"></script>
   <script src="settings-logic.js"></script>
   <script src="remote-logic.js"></script>
   <script src="sources-logic.js"></script>
   <script src="appearance-logic.js"></script>
   <script src="settings.js"></script>
+  <script src="settings-page.js"></script>
   <script src="remote.js"></script>
   <script src="sources.js"></script>
   <script src="appearance.js"></script>

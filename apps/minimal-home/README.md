@@ -56,13 +56,15 @@ A change shows at once. `shared/theme.js`, loaded in each app's `<head>`, sets t
 
 ## Settings view
 
-The Settings action opens a Settings view inside Minimal Home, so no separate app has to start: it appears in about 0.2 s instead of about 1 s. Its code is `app/settings.js`, `app/settings-logic.js` (tested by `test/home-logic.test.js`) and `app/settings.css`. Home reads the current values in the background about a second after it comes on screen, so they are already filled in when the view opens, and refreshes them on every open.
+The Settings action opens a Settings view inside Minimal Home, so no separate app has to start: it appears in about 0.2 s instead of about 1 s. It is a hub: quick rows for picture mode, panel brightness, energy saving and sound mode, links to Remote buttons and Appearance, and links to Settings pages such as Picture. Quick Start+, Wi-Fi and Ethernet stay on the hub until their pages exist (`docs/settings-plan.md`). Its code is `app/settings.js`, `app/settings-logic.js` (tested by `test/settings-logic.test.js`) and `app/settings.css`. Home reads the hub's values in the background about a second after it comes on screen, so they are already filled in when the view opens, and refreshes them on every open.
 
-The view exposes a deliberately small set of verified controls: picture mode, panel brightness, black level, contrast, colour temperature, energy saving, sound mode, Quick Start+, live Wi-Fi and Ethernet status, and a Wi-Fi on/off control. Detailed network setup and less common options remain available through the Open LG Settings button.
+A Settings page, such as Picture, is a scrolling list drawn from `app/settings-specs.js` by `app/settings-page.js`: LG's names, value names and help, and rules such as Panel brightness being greyed while Energy saving is Auto or Maximum, as in LG Settings (the hub greys it too). The TV says which rows and values it offers and their ranges, so a row it doesn't have is left out. A page reads everything in one root call when it opens (a `settingsservice/batch`), never at Home's start, and writes each change at once; holding Left or Right keeps changing the value. A card beside the list explains the focused row, and Right reaches "Open in LG Settings", which opens LG at the same panel.
 
-Settings are read immediately before context-sensitive writes so picture changes stay scoped to the active input and picture mode.
+The TV keeps picture settings per input (the apps, live TV and each HDMI input, each with its own picture mode and its own values per mode), so the Picture page starts with "Applies to": the input that played last, which LG Settings changes too, and Left/Right chooses another. Another input's values are read in two steps (its picture mode, then that mode's values), and writes name the input and mode explicitly; the first change in a mode also sets LG's flag that shows the mode as "(User Settings)", as LG does. Energy saving, Reduce blue light and FILMMAKER MODE auto start apply to every input and say so.
 
-Arrows navigate without changing values. Press OK to enter edit mode, use Left/Right to change a value, and press OK or Back to leave edit mode. Back outside edit mode, or the Home key, returns to the app grid.
+Arrows navigate without changing values. Press OK to enter edit mode, use Left/Right to change a value, and press OK or Back to leave edit mode. Back outside edit mode returns to the hub, and from the hub to the app grid.
+
+To add a page: its rows in `PAGES` in `settings-specs.js`, an empty `<main id="NAME-view" class="panel-view settings-page">` shell in `index.html` like Picture's, an entry in `VIEWS` in `app.js` (`SettingsPage.create("NAME")`), and a link row on the hub with `data-view="NAME"`.
 
 The launcher installs as a normal removable app. Its optional Home replacement uses a reversible runtime bind mount containing a redirect stub; it does not write to the stock system partition.
 

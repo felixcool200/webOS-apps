@@ -1,5 +1,6 @@
-/* The Settings view. The header, rows, focus, footer and status are shared with Remote buttons
-   (.panel-view in style.css); every rule here is scoped to #settings-view. */
+/* The Settings view and its pages (.settings-page, such as Picture). The header, rows, focus, footer
+   and status are shared with Remote buttons (.panel-view in style.css); every rule here is scoped to
+   #settings-view or .settings-page. */
 #settings-view h2, #settings-view p { margin: 0; }
 #settings-view h2 { margin: 0 0 1.6vh; color: var(--muted); font-size: 2vh; font-weight: 600; }
 
@@ -35,7 +36,7 @@
 #settings-view .status-setting { cursor: default; }
 #settings-view .section-gap { margin-top: 2.2vh; }
 
-#settings-view .range {
+#settings-view .range, .settings-page .range {
   position: relative;
   height: 0.6vh;
   overflow: hidden;
@@ -43,7 +44,7 @@
   background: rgba(255, 255, 255, 0.18);
 }
 
-#settings-view .range i {
+#settings-view .range i, .settings-page .range i {
   display: block;
   width: var(--fill, 0%);
   height: 100%;
@@ -51,7 +52,7 @@
   background: var(--accent);
 }
 
-#settings-view .action {
+#settings-view .action, .settings-page .action {
   min-height: 5.2vh;
   padding: 0 1.3vw;
   border-radius: 999px;
@@ -74,3 +75,65 @@
 }
 
 #settings-view .focusable.is-busy { opacity: 0.65; }
+/* Greyed out: another setting decides it (the status line says why on OK). */
+#settings-view .setting.is-greyed > * { opacity: 0.45; }
+
+/* A page: a list of rows under section titles, scrolled to keep the focused row in view, and a card
+   about the focused row. */
+.settings-page .page-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 2.2vw;
+}
+
+/* The list is its rows' offset parent, which UI.keepInView needs, and leaves room for the focus ring. */
+.settings-page .page-list {
+  position: relative;
+  min-height: 0;
+  padding: 0.6vh 0.3vw;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.settings-page .page-list::-webkit-scrollbar { display: none; }
+.settings-page .page-section { margin: 2.4vh 0 1.2vh; color: var(--muted); font-size: 1.5vh; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.settings-page .page-list > .page-section:first-child { margin-top: 0; }
+
+.settings-page .setting {
+  min-height: 7.4vh;
+  padding: 1.1vh 1.4vw;
+  grid-template-columns: minmax(0, 1fr) minmax(8vw, 12vw) 9vw;
+}
+
+.settings-page .setting.is-first { border-radius: 1.5vh 1.5vh 0 0; }
+.settings-page .setting.is-last { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+.settings-page .setting.is-first.is-last, .settings-page [data-key="appliesTo"] { border-radius: 1.5vh; border-bottom: 0; }
+.settings-page .setting small:empty { display: none; }
+.settings-page .setting .value { grid-column: 3; text-align: right; }
+.settings-page .setting.choice-setting .value { grid-column: 2 / 4; }
+.settings-page .setting.is-editing .value.can-decrease::before { content: "‹  "; }
+.settings-page .setting.is-editing .value.can-increase::after { content: "  ›"; }
+/* Greyed out: the TV doesn't offer it now, or another setting decides it (the card says why). */
+.settings-page .setting.is-greyed > * { opacity: 0.45; }
+/* Another input's settings are being read. */
+.settings-page .page-list.is-switching .setting:not([data-key="appliesTo"]) { opacity: 0.55; }
+.settings-page .focusable.is-busy { opacity: 0.65; }
+
+.settings-page .page-card {
+  align-self: start;
+  padding: 2.2vh 1.6vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vh;
+  border-radius: 1.5vh;
+  background: var(--row-surface);
+}
+
+.settings-page .card-title { font-size: 2vh; font-weight: 600; }
+.settings-page .page-card p { margin: 0; color: var(--muted); font-size: 1.45vh; line-height: 1.45; }
+.settings-page .page-card p:empty { display: none; }
+.settings-page .page-card .card-scope { color: var(--accent); }
+.settings-page .page-card .card-reason { color: var(--error); }
+.settings-page .page-card .action { align-self: flex-start; margin-top: 0.8vh; }

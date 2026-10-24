@@ -20,25 +20,11 @@ var MinimalSettings = (function () {
   var ready = false;
   var loaded = false;
 
+  // The quick rows. Picture mode and energy saving use the Picture page's names (settings-specs.js).
   var SPECS = {
-    pictureMode: { category: "picture", kind: "choice", labels: {
-      vivid: "Vivid", normal: "Standard", eco: "Eco", cinema: "Cinema",
-      sports: "Sports", game: "Game Optimizer", filmMaker: "Filmmaker Mode",
-      expert1: "Expert Bright", expert2: "Expert Dark",
-      hdrVivid: "HDR Vivid", hdrStandard: "HDR Standard", hdrEco: "HDR Eco",
-      hdrCinemaBright: "HDR Cinema Home", hdrCinema: "HDR Cinema",
-      hdrGame: "HDR Game", hdrFilmMaker: "HDR Filmmaker",
-      dolbyHdrVivid: "Dolby Vision Vivid", dolbyHdrStandard: "Dolby Vision Standard",
-      dolbyHdrCinemaBright: "Dolby Vision Cinema Home", dolbyHdrCinema: "Dolby Vision Cinema",
-      dolbyHdrGame: "Dolby Vision Game"
-    }},
+    pictureMode: { category: "picture", kind: "choice", labels: SettingsSpecs.LABELS.pictureMode },
     backlight: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
-    brightness: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
-    contrast: { category: "picture", kind: "range", min: 0, max: 100, step: 5 },
-    colorTemperature: { category: "picture", kind: "range", min: -50, max: 50, step: 5 },
-    energySaving: { category: "picture", kind: "choice", labels: {
-      off: "Off", auto: "Auto", min: "Minimum", med: "Medium", max: "Maximum"
-    }},
+    energySaving: { category: "picture", kind: "choice", labels: SettingsSpecs.LABELS.energySaving },
     soundMode: { category: "sound", kind: "choice", labels: {
       aiSoundPlus: "AI Sound Pro", standard: "Standard", movie: "Cinema",
       news: "Clear Voice", sports: "Sports", music: "Music", game: "Game"
@@ -49,6 +35,14 @@ var MinimalSettings = (function () {
 
   function setStatus(message, type) {
     UI.setStatus("settings-status", message, type);
+  }
+
+  // Why a quick row can't be changed now, from the Picture page's rules (Panel brightness while
+  // Energy saving is Auto or Maximum, as in LG Settings), or "".
+  function greyedReason(key) {
+    var row = SettingsLogic.pageRows(SettingsSpecs.PAGES.picture).filter(function (item) { return item.key === key; })[0];
+    var rule = row && row.greyedWhen;
+    return rule && state[rule.key] && rule.values.indexOf(state[rule.key].value) >= 0 ? rule.reason : "";
   }
 
   function labelFor(key, value) {
@@ -66,6 +60,7 @@ var MinimalSettings = (function () {
     var element = elementFor(key);
     if (!item || !element) { return; }
     element.querySelector(".value").textContent = spec.kind === "choice" ? labelFor(key, item.value) : String(item.value);
+    element.classList.toggle("is-greyed", !!greyedReason(key));
     if (spec.kind === "range") {
       var percent = (Number(item.value) - spec.min) / (spec.max - spec.min) * 100;
       element.querySelector(".range").style.setProperty("--fill", Math.max(0, Math.min(100, percent)) + "%");
@@ -140,6 +135,7 @@ var MinimalSettings = (function () {
       loaded = true;
       if (applied.network) { renderNetwork(applied.network.connection, applied.network.wifi); }
       Object.keys(SPECS).forEach(renderSetting);
+      if (state.pictureMode && state.backlight) { setLinkValue("picture", labelFor("pictureMode", state.pictureMode.value) + " · " + state.backlight.value); }
       var failed = applied.failed;
       if (failed) { setStatus("Could not read some settings: " + failed.message, "error"); }
       else if (editing) { editingStatus(); }
@@ -189,7 +185,7 @@ var MinimalSettings = (function () {
 
     request.then(function () {
       state[key].value = value;
-      renderSetting(key);
+      Object.keys(SPECS).forEach(renderSetting);
       if (editing) { editingStatus("Saved"); }
       else { setStatus("Saved", "ok"); }
       if (key === "pictureMode") { return load(); }
@@ -234,6 +230,12 @@ var MinimalSettings = (function () {
 
   function startEditing(element) {
     if (!element || !element.getAttribute("data-setting")) { return; }
+    var reason = greyedReason(element.getAttribute("data-setting"));
+    if (reason) {
+      setFocus(element);
+      setStatus(reason, "error");
+      return;
+    }
     if (editing && editing !== element) { editing.classList.remove("is-editing"); }
     setFocus(element);
     editing = element;

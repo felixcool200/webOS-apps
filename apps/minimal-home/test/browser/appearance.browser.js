@@ -17,7 +17,7 @@ function accent() {
 BrowserTest.define("the next theme shows at once and reaches the other apps once the changes stop", {}, async (t) => {
   await t.homeReady();
   openSettings();
-  for (let i = 0; i < 6; i += 1) { t.key("DOWN"); }
+  for (let i = 0; i < 5; i += 1) { t.key("DOWN"); }
   t.key("OK");
   t.equal(t.view(), "appearance");
   t.equal(t.focused().id, "appearance-theme");
@@ -87,8 +87,8 @@ BrowserTest.define("every Settings row fits above the footer and the Appearance 
   t.$$("#settings-view .setting, #settings-view .info-card").forEach((row) => {
     t.ok(row.getBoundingClientRect().bottom <= footer, (row.id || row.getAttribute("data-setting") || "the card") + " ends above the footer");
   });
-  for (let i = 0; i < 6; i += 1) { t.key("DOWN"); }
-  t.equal(t.focused().id, "appearanceLink", "Down from Energy saving");
+  for (let i = 0; i < 5; i += 1) { t.key("DOWN"); }
+  t.equal(t.focused().id, "appearanceLink", "Down from Picture mode");
   t.key("RIGHT");
   t.equal(t.focused().id, "advanced");
   t.key("LEFT");
@@ -137,12 +137,8 @@ BrowserTest.define("sharing a theme also copies the splash in its background's c
   await t.wait(300);
   const splash = t.tv().files["/home/root/.config/minimal-suite/splash.png"];
   t.ok(splash, "the splash is written when the view closes, without waiting");
+  // That file's size and colours are checked by splashes.test.js.
   t.equal(splash.from, "/media/developer/apps/usr/palm/applications/org.webosbrew.minimalhome/splashes/aubergine.png");
-  // The page is Home as installed, so the copied file is here too (its colours: splashes.test.js).
-  const image = new Image();
-  image.src = "splashes/aubergine.png";
-  await image.decode();
-  t.equal([image.width, image.height], [1280, 720]);
 });
 
 // The test fills localStorage after <head> ran, so it reloads the page once: on the second load the

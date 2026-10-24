@@ -1,4 +1,4 @@
-// The Settings view, with the fake TV's settings (backlight 80 unless a test sets it).
+// The Settings view, with the fake TV's settings (backlight 80 and energy saving Off unless a test sets them).
 
 function settingValue(t, key) {
   return t.text('[data-setting="' + key + '"] .value');
@@ -10,7 +10,7 @@ BrowserTest.define("one failed read leaves the rest of Settings working", { tv: 
   await t.until(() => /Could not read some settings/.test(t.text("#settings-status")), 4000, "the error");
   t.equal(settingValue(t, "pictureMode"), "Standard");
   t.equal(settingValue(t, "backlight"), "80");
-  t.equal(settingValue(t, "energySaving"), "Auto", "the current value is still shown");
+  t.equal(settingValue(t, "energySaving"), "Off", "the current value is still shown");
 });
 
 BrowserTest.define("at the maximum, Right on a range shows no arrow and writes nothing", { tv: { settings: { picture: { backlight: "100" } } } }, async (t) => {
@@ -72,4 +72,22 @@ BrowserTest.define("reopening Settings during a write doesn't let the older read
   await t.wait(2200);
   t.equal(t.tv().written, [["backlight", 85]]);
   t.equal(t.text('[data-setting="backlight"] .value'), "85", "the new value stays");
+});
+
+BrowserTest.define("panel brightness can't be changed while energy saving is Auto, as in LG Settings", {
+  tv: { settings: { picture: { energySaving: "auto" } } }
+}, async (t) => {
+  await t.homeReady();
+  t.$("#settings").click();
+  await t.until(() => settingValue(t, "energySaving") === "Auto", 4000, "the values");
+  t.ok(t.$('[data-setting="backlight"]').classList.contains("is-greyed"));
+  t.key("DOWN");
+  t.key("OK");
+  t.ok(!t.$('[data-setting="backlight"].is-editing'), "not editing");
+  t.match(t.text("#settings-status"), /Energy saving is Auto/);
+  t.key("DOWN");
+  t.key("OK");
+  t.key("RIGHT");
+  await t.until(() => settingValue(t, "energySaving") === "Off", 3000, "the write");
+  t.ok(!t.$('[data-setting="backlight"]').classList.contains("is-greyed"), "Off frees it");
 });

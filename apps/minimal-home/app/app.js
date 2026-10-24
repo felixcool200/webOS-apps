@@ -63,7 +63,8 @@
     sources: { back: "home", from: "sources-button", module: Sources },
     settings: { back: "home", from: "settings", module: MinimalSettings },
     remote: { back: "settings", from: "settings", module: RemoteButtons },
-    appearance: { back: "settings", from: "settings", module: Appearance }
+    appearance: { back: "settings", from: "settings", module: Appearance },
+    picture: { back: "settings", from: "settings", module: SettingsPage.create("picture") }
   };
   var view = "home";
   var installed = [];
