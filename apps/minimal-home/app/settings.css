@@ -4,13 +4,26 @@
 #settings-view h2, #settings-view p { margin: 0; }
 #settings-view h2 { margin: 0 0 1.6vh; color: var(--muted); font-size: 2vh; font-weight: 600; }
 
+/* The two columns share their grid rows (each section's title, box, title, box fill one column), so
+   the second titles, Minimal Home and More settings, are always level. */
 #settings-view .columns {
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 1.35fr 1fr;
-  gap: 2.2vw;
+  grid-template-rows: repeat(4, auto);
+  grid-auto-flow: column;
+  align-content: start;
+  align-items: start;
+  column-gap: 2.2vw;
 }
+
+#settings-view .columns > section { display: contents; }
+
+/* The page links share the quick rows' height, and the LG card the Minimal Home links'. */
+#settings-view .columns > section:last-child > .panel { align-self: stretch; display: flex; flex-direction: column; }
+#settings-view .columns > section:last-child > .panel > .link-row { flex: 1; min-height: 0; }
+#settings-view .columns > section:last-child > .info-card { align-self: stretch; }
 
 #settings-view .panel {
   overflow: hidden;

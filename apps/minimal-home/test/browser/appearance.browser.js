@@ -184,3 +184,16 @@ BrowserTest.define("with many themes of your own the one in use stays in view, a
   t.ok(current.top >= box.top && current.bottom <= box.bottom, "the current card is shown");
   t.ok(t.$(".appearance-note").getBoundingClientRect().bottom <= footer, "the note ends above the footer");
 });
+
+BrowserTest.define("the hub's columns line up: titles, boxes and the LG card", {}, async (t) => {
+  await t.homeReady();
+  openSettings();
+  const box = (selector) => t.$(selector).getBoundingClientRect();
+  const titles = t.$$("#settings-view h2").map((title) => title.getBoundingClientRect());
+  t.equal(titles.length, 4);
+  t.ok(Math.abs(titles[0].top - titles[2].top) <= 1, "Quick and All settings are level");
+  t.ok(Math.abs(titles[1].top - titles[3].top) <= 1, "Minimal Home and More settings are level");
+  const panels = t.$$("#settings-view .panel").map((panel) => panel.getBoundingClientRect());
+  t.ok(Math.abs(panels[0].bottom - panels[2].bottom) <= 1, "the quick rows and the page links end level");
+  t.ok(Math.abs(panels[1].bottom - box("#settings-view .info-card").bottom) <= 1, "the Minimal Home links and the LG card end level");
+});
