@@ -18,6 +18,11 @@ mkdir -p "$(dirname "$CONFIG")"
 EOF
 chmod 755 "$DIR/ezinject"
 
+# LG Input Hook's own service loads the library only when this marker is missing, so a reinstalled
+# LG Input Hook app won't load it as well (every binding would then fire twice). Written before the
+# wait below, so its autostart can't slip in meanwhile.
+: > /tmp/inputhook
+
 # The remote's input program may not be running yet this early in the boot, so wait for it (up to a
 # minute) in the background instead of holding up the boot scripts after this one.
 (
@@ -35,7 +40,4 @@ chmod 755 "$DIR/ezinject"
       "$DIR/ezinject" -l "/tmp/lginput-hook-$name.log" "$pid" "$DIR/libinputhookpp.so" > "/tmp/ezinject-$name.log" 2>&1
     done
   done
-  # LG Input Hook's own service loads the library only when this marker is missing, so a reinstalled
-  # LG Input Hook app won't load it a second time (every binding would then fire twice).
-  : > /tmp/inputhook
 ) </dev/null >/dev/null 2>&1 &

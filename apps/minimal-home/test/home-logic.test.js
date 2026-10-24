@@ -3,7 +3,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const HomeLogic = require("../app/home-logic.js");
-const SettingsLogic = require("../app/settings-logic.js");
 
 const app = (id, extra) => Object.assign({ id: id, title: id }, extra);
 const ids = (apps) => apps.map((entry) => entry.id);
@@ -40,27 +39,6 @@ test("a missing or broken saved list falls back to a copy of the default", () =>
   assert.deepStrictEqual(HomeLogic.parseList("{\"a\":1}", fallback), ["a"]);
   assert.notStrictEqual(HomeLogic.parseList(null, fallback), fallback);
   assert.deepStrictEqual(HomeLogic.parseList("[\"b\"]", fallback), ["b"]);
-});
-
-test("choice settings offer the TV's active values, including the current one", () => {
-  const response = { values: { arrayExt: [{ value: "on" }, { value: "off" }, { value: "auto", active: false }, { value: "max", visible: false }] } };
-  assert.deepStrictEqual(SettingsLogic.allowedValues(response, "on", null), ["on", "off"]);
-  assert.deepStrictEqual(SettingsLogic.allowedValues(response, "eco", null), ["eco", "on", "off"]);
-  assert.deepStrictEqual(SettingsLogic.allowedValues(response, "on", ["off", "on"]), ["off", "on"]);
-  assert.deepStrictEqual(SettingsLogic.allowedValues(null, "on", null), ["on"]);
-});
-
-test("stepping a setting stays within its range or list", () => {
-  const range = { kind: "range", min: 0, max: 100, step: 5 };
-  assert.strictEqual(SettingsLogic.nextValue(range, { value: 50 }, 1), 55);
-  assert.strictEqual(SettingsLogic.nextValue(range, { value: 98 }, 1), 100);
-  assert.strictEqual(SettingsLogic.nextValue(range, { value: 2 }, -1), 0);
-  const choice = { kind: "choice" };
-  assert.strictEqual(SettingsLogic.nextValue(choice, { value: "b", values: ["a", "b", "c"] }, 1), "c");
-  assert.strictEqual(SettingsLogic.nextValue(choice, { value: "c", values: ["a", "b", "c"] }, 1), "c");
-  assert.strictEqual(SettingsLogic.nextValue(choice, { value: "a", values: ["a", "b", "c"] }, -1), "a");
-  assert.strictEqual(SettingsLogic.nextValue(choice, { value: "a", values: [] }, 1), undefined);
-  assert.strictEqual(SettingsLogic.nextValue(choice, undefined, 1), undefined);
 });
 
 const layout = () => ({ apps: ["yt", "nf", "sr"], tools: ["hb"], hidden: ["alexa", "camera"] });

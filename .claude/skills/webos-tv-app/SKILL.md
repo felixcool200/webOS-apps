@@ -95,7 +95,7 @@ For `apps/minimal-home` the script also unmounts the Home redirect before instal
 
 ## Test
 
-`npm test` at the repository root runs the Node tests of `shared/` and every app's logic module. Run it before deploying. Everything that needs the page or the TV is checked on the TV:
+`npm test` at the repository root runs the Node tests of `shared/` and every app's logic module, and `npm run test:browser` runs Minimal Home's views in headless Chrome against a fake TV (`apps/minimal-home/test/browser/`). Run both before deploying. When fixing a bug in a view, add a browser test that fails without the fix (the fake TV can delay, lose or fail any call); put rules that need no page in a logic module with a Node test. Only what needs the real TV is checked on the TV:
 
 1. **Installed version:** the deploy script fails if the TV does not report the new version within 30 seconds.
 2. **Launched:** `tv 'grep NL_APP_LAUNCH_BEGIN /var/log/messages | tail -n 5'` should show the app id. `tv "luna-send -n 1 -f luna://com.webos.service.applicationmanager/running '{}'"` lists running apps.

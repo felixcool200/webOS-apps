@@ -44,7 +44,14 @@ Each app keeps the rules that need no page or TV (parsing departures, arranging 
 npm test
 ```
 
-Everything else is checked on the TV.
+Minimal Home also has browser tests for its views (arranging apps, Remote buttons, Settings, Sources): `apps/minimal-home/test/browser/*.browser.js`, each run in headless Chrome against a fake TV (`fake-tv.js`) that answers Homebrew Channel's exec service and Home's Luna calls from memory, with delays, lost replies and failed reads where a test asks for them. They need Google Chrome or Chromium (or `CHROME` set to one) and take a few seconds:
+
+```sh
+npm run test:browser          # all of them
+npm run test:browser -- Remove # only the tests whose name contains "Remove"
+```
+
+What only the TV can show (timing, its own services, the remote) is checked on the TV.
 
 Built IPKs are not committed. They can later be published as GitHub release assets and exposed through a Homebrew Channel repository manifest. Do not publish a Departures IPK built with a Trafiklab key; see its README.
 

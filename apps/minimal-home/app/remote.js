@@ -62,6 +62,8 @@ var RemoteButtons = (function () {
   // view opened (fresh), so a change can never be made to an outdated copy and overwrite the file.
   var binds = null;
   var fresh = false;
+  // Counts the changes made, so a read that answers after a change was made keeps the change.
+  var changes = 0;
   var readError = null;
   var hooked = null;
   // Bindings made some other way, remembered so they stay on offer as Custom (see Logic.choices).
@@ -156,20 +158,28 @@ var RemoteButtons = (function () {
     host.setLinkValue("remote", binds === null ? "—" : preset + (count ? count + " changed" : "None changed"));
   }
 
-  // Reads the bindings, first making the real ones active again if a test was cut short. Skipped
-  // while listening, when binds already holds the real bindings.
+  // Reads the bindings, first saving a change still waiting to be saved and making the real ones
+  // active again if a test was cut short. Skipped while listening, when binds already holds the real
+  // bindings. The hook counts as loaded when its library is in the remote's input program.
   function load() {
     return queue(function () {
       if (listening) { return null; }
-      return WebOS.retry(function () {
-        return WebOS.rootShell(RESTORE + "; if [ -f " + HOOK_LOG + " ]; then echo hooked; else echo unhooked; fi; " +
-          "cat " + CONFIG + " 2>/dev/null || echo '{}'");
-      }, RETRY_MS).then(function (result) {
+      var changesAtStart;
+      return Promise.resolve(flush()).then(function () {
+        changesAtStart = changes;
+        return WebOS.retry(function () {
+          return WebOS.rootShell(RESTORE + "; if grep -q libinputhookpp /proc/$(pidof lginput2 | cut -d' ' -f1)/maps 2>/dev/null; " +
+            "then echo hooked; else echo unhooked; fi; cat " + CONFIG + " 2>/dev/null || echo '{}'");
+        }, RETRY_MS);
+      }).then(function (result) {
         var output = result.stdoutString || "";
         var lineEnd = output.indexOf("\n");
         var read = JSON.parse(output.slice(lineEnd + 1) || "{}");
         hooked = output.slice(0, lineEnd) === "hooked";
-        binds = read && typeof read === "object" && !Array.isArray(read) ? read : {};
+        // A change made while this read ran is newer than what it read; it is saved as usual.
+        if (changes === changesAtStart || binds === null) {
+          binds = read && typeof read === "object" && !Array.isArray(read) ? read : {};
+        }
         // The file holds the active preset's bindings; presets made before presets existed start from it.
         presets.list.forEach(function (preset) { if (preset.binds === null) { preset.binds = JSON.parse(JSON.stringify(binds)); } });
         Logic.activePreset(presets).binds = JSON.parse(JSON.stringify(binds));
@@ -218,6 +228,7 @@ var RemoteButtons = (function () {
 
   // Saves the bindings to the file after SAVE_DELAY_MS, and to the active preset now.
   function scheduleSave() {
+    changes += 1;
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(function () { queue(save); }, SAVE_DELAY_MS);
     Logic.activePreset(presets).binds = JSON.parse(JSON.stringify(binds));
@@ -563,8 +574,14 @@ var RemoteButtons = (function () {
     });
   }
 
-  // Takes a button off the preset; whatever it was set to do is undone too.
+  // Takes a button off the preset; whatever it was set to do is undone too, so it waits like any
+  // other change until the bindings were read.
   function removeButton(code) {
+    if (!fresh) {
+      setStatus(readError ? "Could not read the bindings (" + readError + ") · reopen this page to retry" : "Reading the bindings…",
+        readError ? "error" : "");
+      return;
+    }
     var name = Logic.nameFor(code, custom);
     var row = rowFor(code);
     var next = row && (row.nextElementSibling || row.previousElementSibling);
@@ -944,5 +961,5 @@ var RemoteButtons = (function () {
     return listening ? stopListening("") : queue(flush);
   }
 
-  return { attach: attach, load: load, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
+  return { attach: attach, preload: load, load: load, open: open, close: close, handleKey: handleKey, handlePointer: handlePointer };
 }());

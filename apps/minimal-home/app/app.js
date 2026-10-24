@@ -35,8 +35,12 @@
   var lunaCall = WebOS.lunaCall;
   var rootLuna = WebOS.rootLuna;
   // webOS reloads Home twice in quick succession when it comes into view, and the app list call
-  // sometimes gets no answer then. Retry after these delays before showing an error.
+  // sometimes gets no answer then. Each try gives up after APP_LIST_TIMEOUT_MS and is retried after
+  // these delays before showing an error.
   var APP_LIST_RETRY_MS = [500, 1000, 2000];
+  var APP_LIST_TIMEOUT_MS = 4000;
+  // The app list as last read, shown at once at the next start while the TV is asked again.
+  var APP_LIST_KEY = "home.appList";
   // Settings values are read this long after Home is on screen, so they are ready when the Settings
   // view opens without competing with the app list.
   var SETTINGS_PRELOAD_DELAY_MS = 1000;
@@ -201,14 +205,23 @@
     return button;
   }
 
-  function showApps(apps) {
-    installed = HomeLogic.sortInstalled(apps, PREFERRED_APP_ORDER, [APP_ID, "com.webos.app.home"]);
-    tiles = {};
-    renderApps(null);
+  // What Home needs of an app from listApps, which is also what the remembered list keeps.
+  function appSummary(app) {
+    return { id: app.id, title: app.title, icon: app.icon, folderPath: app.folderPath, activeFolderPath: app.activeFolderPath, visible: app.visible };
   }
 
+  function showApps(apps) {
+    installed = HomeLogic.sortInstalled(apps.map(appSummary), PREFERRED_APP_ORDER, [APP_ID, "com.webos.app.home"]);
+    renderApps(selected && selected.getAttribute("data-app-id"));
+  }
+
+  // Tiles are kept for as long as their app looks the same.
   function tileFor(app) {
-    if (!tiles[app.id]) { tiles[app.id] = makeHomeTile(app); }
+    var looks = JSON.stringify(app);
+    if (!tiles[app.id] || tiles[app.id].looks !== looks) {
+      tiles[app.id] = makeHomeTile(app);
+      tiles[app.id].looks = looks;
+    }
     return tiles[app.id];
   }
 
@@ -238,6 +251,8 @@
     status.textContent = installed.length ? "" : "No apps found";
     if (view !== "home") { return; }
     var focus = (focusId || pickedId) && document.querySelector('#home-view [data-app-id="' + (focusId || pickedId) + '"]');
+    // A button outside the grid (Sources, Settings) keeps the focus.
+    if (!focus && selected && selected.isConnected && !selected.getAttribute("data-app-id")) { focus = selected; }
     setFocus(focus || document.querySelector("#apps .focusable") || document.querySelector("#home-view .focusable"));
   }
 
@@ -313,25 +328,30 @@
     showEditHint();
   }
 
-  // How many tiles a grid shows per line, from its columns.
-  function columnsOf(grid) {
-    var tracks = window.getComputedStyle(grid).gridTemplateColumns;
-    return tracks && tracks !== "none" ? tracks.split(" ").length : Infinity;
-  }
-
   // Moves the app picked up one step and saves where every app now is.
   function movePicked(direction) {
     var layout = currentLayout();
     var next = HomeLogic.moveInLayout(layout, pickedId, direction,
-      { apps: columnsOf(document.getElementById("apps")), tools: columnsOf(document.getElementById("tools")),
-        hidden: columnsOf(document.getElementById("hidden-row")) });
+      { apps: UI.columnsOf(document.getElementById("apps")), tools: UI.columnsOf(document.getElementById("tools")),
+        hidden: UI.columnsOf(document.getElementById("hidden-row")) });
     if (next === layout) { return; }
     var lists = HomeLogic.savedLists(next, readList(TOOLS_KEY, DEFAULT_TOOLS), readList(HIDDEN_KEY, DEFAULT_HIDDEN),
       installed.map(function (app) { return app.id; }));
     writeList(ORDER_KEY, lists.order);
     writeList(TOOLS_KEY, lists.tools);
     writeList(HIDDEN_KEY, lists.hidden);
-    renderApps(pickedId);
+    // Only the picked-up tile moves; re-adding the others would restart their wiggle.
+    var rows = { apps: "apps", tools: "tools", hidden: "hidden-row" };
+    Object.keys(rows).forEach(function (name) {
+      var index = next[name].indexOf(pickedId);
+      if (index < 0) { return; }
+      var row = document.getElementById(rows[name]);
+      var others = Array.prototype.filter.call(row.children, function (tile) { return tile !== tiles[pickedId]; });
+      row.insertBefore(tiles[pickedId], others[index] || null);
+    });
+    document.getElementById("tools-section").hidden = !document.getElementById("tools").children.length && !arranging;
+    document.getElementById("hidden-empty").hidden = !!document.getElementById("hidden-row").children.length;
+    setFocus(tiles[pickedId]);
   }
 
   // Keys while arranging. Returns true when the key was used.
@@ -398,7 +418,7 @@
       names[KEY.UP] = "up";
       names[KEY.DOWN] = "down";
       var target = HomeLogic.gridNeighbor(grids.map(function (grid) {
-        return { count: tilesOf(grid).length, columns: columnsOf(grid) };
+        return { count: tilesOf(grid).length, columns: UI.columnsOf(grid) };
       }), { section: section, index: tilesOf(selected.parentNode).indexOf(selected) }, names[direction]);
       if (target) { return tilesOf(grids[target.section])[target.index]; }
     }
@@ -454,7 +474,12 @@
   // back if a remote test was cut short by a reload.
   function preloadViews() {
     function preload() {
-      window.setTimeout(function () { MinimalSettings.preload(); RemoteButtons.load(); Sources.preload(); }, SETTINGS_PRELOAD_DELAY_MS);
+      window.setTimeout(function () {
+        Object.keys(VIEWS).forEach(function (name) {
+          var module = VIEWS[name].module;
+          if (module && module.preload) { module.preload(); }
+        });
+      }, SETTINGS_PRELOAD_DELAY_MS);
     }
     if (!document.hidden) {
       preload();
@@ -531,13 +556,23 @@
     });
   }
 
+  // Reads the app list and shows it unless it is the one already shown; keeps it for the next start.
   function loadApps() {
     return WebOS.retry(function () {
-      return rootLuna("luna://com.webos.applicationManager/listApps", {}).then(function (result) {
+      return rootLuna("luna://com.webos.applicationManager/listApps", {}, APP_LIST_TIMEOUT_MS).then(function (result) {
         if (!result.apps) { throw new Error("App list unavailable"); }
+        var list = JSON.stringify(result.apps.map(appSummary));
+        if (list === readStoredText(APP_LIST_KEY) && installed.length) { return; }
         showApps(result.apps);
+        try { window.localStorage.setItem(APP_LIST_KEY, list); }
+        catch (error) { console.warn("Could not keep the app list: " + error.message); }
       });
     }, APP_LIST_RETRY_MS);
+  }
+
+  function readStoredText(key) {
+    try { return window.localStorage.getItem(key); }
+    catch (error) { return null; }
   }
 
   function init() {
@@ -556,11 +591,22 @@
     tickClock();
     window.setInterval(tickClock, 1000);
 
-    // App icons are read through a link to / inside the app's folder.
-    WebOS.rootShell("test -e '" + APP_DIR + "/hack' || ln -s / '" + APP_DIR + "/hack'")
-      .catch(function (error) { console.warn("Could not link the app icons: " + error.message); })
-      .then(loadApps)
+    // The app list from the last start shows at once; the TV is asked for the current one meanwhile.
+    var remembered = HomeLogic.parseList(readStoredText(APP_LIST_KEY), []);
+    if (remembered.length) { showApps(remembered); }
+    // App icons are read through a link to / inside the app's folder. When it has just been made
+    // (the first start), the tiles are made again so their icons load.
+    var iconLink = WebOS.rootShell("test -e '" + APP_DIR + "/hack' || { ln -s / '" + APP_DIR + "/hack' && echo made; }")
+      .then(function (result) {
+        if (String(result.stdoutString).indexOf("made") >= 0 && installed.length) {
+          tiles = {};
+          renderApps(selected && selected.getAttribute("data-app-id"));
+        }
+      })
+      .catch(function (error) { console.warn("Could not link the app icons: " + error.message); });
+    Promise.all([iconLink, loadApps()])
       .catch(function () {
+        if (installed.length) { return; }
         var status = document.getElementById("status");
         status.textContent = "Could not load installed apps";
         status.classList.add("visible");

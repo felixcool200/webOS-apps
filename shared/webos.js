@@ -10,7 +10,8 @@ var WebOS = (function () {
   // Bridges of calls still waiting for their reply. A bridge that is garbage collected may drop its call.
   var waiting = [];
 
-  function lunaCall(uri, payload) {
+  // timeoutMs: how long to wait for the reply (CALL_TIMEOUT_MS when left out).
+  function lunaCall(uri, payload, timeoutMs) {
     return new Promise(function (resolve, reject) {
       var bridge;
       var timer = null;
@@ -31,7 +32,7 @@ var WebOS = (function () {
       timer = setTimeout(function () {
         settle(new Error("No reply from " + uri));
         try { bridge.cancel(); } catch (ignore) { /* The call may have ended meanwhile. */ }
-      }, CALL_TIMEOUT_MS);
+      }, timeoutMs || CALL_TIMEOUT_MS);
       bridge.onservicecallback = function (raw) {
         try { settle(null, JSON.parse(raw)); }
         catch (error) { settle(error); }
@@ -43,13 +44,13 @@ var WebOS = (function () {
 
   // Runs a shell command as root through Homebrew Channel's exec service. The reply holds the output
   // in stdoutString, and returnValue is false when the command fails.
-  function rootExec(command) {
-    return lunaCall("luna://org.webosbrew.hbchannel.service/exec", { command: command });
+  function rootExec(command, timeoutMs) {
+    return lunaCall("luna://org.webosbrew.hbchannel.service/exec", { command: command }, timeoutMs);
   }
 
   // Like rootExec, but rejects when the command fails or Homebrew Channel does not answer.
-  function rootShell(command) {
-    return rootExec(command).then(function (result) {
+  function rootShell(command, timeoutMs) {
+    return rootExec(command, timeoutMs).then(function (result) {
       if (!result || result.returnValue === false) {
         throw new Error(String((result && (result.stderrString || result.errorText)) || "No response").trim());
       }
@@ -57,14 +58,43 @@ var WebOS = (function () {
     });
   }
 
+  function lunaSendCommand(uri, payload) {
+    return "luna-send -n 1 -f '" + uri + "' '" + JSON.stringify(payload || {}).replace(/'/g, "'\\''") + "'";
+  }
+
+  // A luna-send reply (its text), or an Error when there is none or it says returnValue false.
+  function readReply(text, fallbackError) {
+    if (!text) { return new Error(fallbackError || "No response"); }
+    var response;
+    try { response = JSON.parse(text); } catch (error) { return new Error("Unreadable reply: " + error.message); }
+    if (response.returnValue === false) { return new Error(response.errorText || response.error || "Request failed"); }
+    return response;
+  }
+
   // Runs a Luna call as root. Rejects when there is no answer or the call answers returnValue false.
-  function rootLuna(uri, payload) {
-    var encoded = JSON.stringify(payload || {}).replace(/'/g, "'\\''");
-    return rootExec("luna-send -n 1 -f '" + uri + "' '" + encoded + "'").then(function (outer) {
-      if (!outer || !outer.stdoutString) { throw new Error((outer && outer.errorText) || "No response"); }
-      var response = JSON.parse(outer.stdoutString);
-      if (response.returnValue === false) { throw new Error(response.errorText || response.error || "Request failed"); }
+  function rootLuna(uri, payload, timeoutMs) {
+    return rootExec(lunaSendCommand(uri, payload), timeoutMs).then(function (outer) {
+      var response = readReply(outer && outer.stdoutString, outer && outer.errorText);
+      if (response instanceof Error) { throw response; }
       return response;
+    });
+  }
+
+  // Runs several Luna calls as root in one shell, side by side: one root call instead of one each.
+  // `calls` are [uri, payload] pairs. Resolves to their replies in order; a call that failed gives an
+  // Error in its place, so one failure doesn't lose the others.
+  function rootLunaBatch(calls, timeoutMs) {
+    var marker = "--- reply ";
+    var script = "d=$(mktemp -d); " + calls.map(function (call, index) {
+      return "(" + lunaSendCommand(call[0], call[1]) + " > $d/" + index + " 2>/dev/null) & ";
+    }).join("") + "wait; for i in " + calls.map(function (call, index) { return index; }).join(" ") +
+      "; do echo '" + marker + "'$i; cat $d/$i; done; rm -rf $d";
+    return rootShell(script, timeoutMs).then(function (result) {
+      var parts = String(result.stdoutString || "").split(marker);
+      return calls.map(function (call, index) {
+        var part = parts.filter(function (text) { return text.indexOf(index + "\n") === 0; })[0];
+        return readReply(part && part.slice(String(index).length + 1).trim());
+      });
     });
   }
 
@@ -105,6 +135,7 @@ var WebOS = (function () {
 
   return {
     KEY: KEY, HOME_ID: HOME_ID, lunaCall: lunaCall, rootExec: rootExec, rootShell: rootShell, rootLuna: rootLuna,
+    rootLunaBatch: rootLunaBatch,
     wait: wait, retry: retry, base64: base64, backToHome: backToHome
   };
 }());

@@ -11,6 +11,10 @@ var MinimalSettings = (function () {
   var editing = null;
   var horizontalReturn = null;
   var state = {};
+  // Each load gets a number, so an older one that answers late is ignored, and the settings changed
+  // while it ran are left as changed.
+  var loadRun = 0;
+  var touched = {};
   var busy = false;
   var ready = false;
   var loaded = false;
@@ -68,10 +72,6 @@ var MinimalSettings = (function () {
     renderEditDirections(key);
   }
 
-  function allowedValues(key, response, current) {
-    return SettingsLogic.allowedValues(response, current, SPECS[key].order);
-  }
-
   function networkDetail(connection) {
     var parts = [];
     if (connection.ssid) { parts.push(connection.ssid); }
@@ -114,38 +114,34 @@ var MinimalSettings = (function () {
     return rootLuna("luna://com.webos.settingsservice/getSystemSettings", { category: category, keys: keys });
   }
 
-  function readChoices(key) {
-    var spec = SPECS[key];
-    return rootLuna("luna://com.webos.settingsservice/getSystemSettingValues", { category: spec.category, key: key });
-  }
+  var CHOICE_KEYS = ["pictureMode", "energySaving", "soundMode", "quickStartMode"];
 
+  // Reads every value and the choices on offer in one root call. A read that fails only leaves its
+  // own settings as they were.
   function load() {
     if (!loaded) { setStatus("Reading current settings…"); }
-    return Promise.all([
-      readCurrent("picture", ["pictureMode", "backlight", "brightness", "contrast", "colorTemperature", "energySaving"]),
-      readCurrent("sound", ["soundMode"]),
-      readCurrent("option", ["quickStartMode"]),
-      readChoices("pictureMode"),
-      readChoices("energySaving"),
-      readChoices("soundMode"),
-      readChoices("quickStartMode"),
-      rootLuna("luna://com.webos.service.connectionmanager/getstatus", {}).catch(function () { return null; }),
-      rootLuna("luna://com.webos.service.wifi/getstatus", {}).catch(function () { return null; })
-    ]).then(function (results) {
-      var picture = results[0].settings || {};
-      var sound = results[1].settings || {};
-      var option = results[2].settings || {};
-      Object.keys(picture).forEach(function (key) { state[key] = { value: picture[key] }; });
-      Object.keys(sound).forEach(function (key) { state[key] = { value: sound[key] }; });
-      Object.keys(option).forEach(function (key) { state[key] = { value: option[key] }; });
-      state.pictureMode.values = allowedValues("pictureMode", results[3], state.pictureMode.value);
-      state.energySaving.values = allowedValues("energySaving", results[4], state.energySaving.value);
-      state.soundMode.values = allowedValues("soundMode", results[5], state.soundMode.value);
-      state.quickStartMode.values = allowedValues("quickStartMode", results[6], state.quickStartMode.value);
+    var run = loadRun += 1;
+    touched = {};
+    var settings = "luna://com.webos.settingsservice/";
+    return WebOS.rootLunaBatch([
+      [settings + "getSystemSettings", { category: "picture", keys: ["pictureMode", "backlight", "brightness", "contrast", "colorTemperature", "energySaving"] }],
+      [settings + "getSystemSettings", { category: "sound", keys: ["soundMode"] }],
+      [settings + "getSystemSettings", { category: "option", keys: ["quickStartMode"] }]
+    ].concat(CHOICE_KEYS.map(function (key) {
+      return [settings + "getSystemSettingValues", { category: SPECS[key].category, key: key }];
+    }), [
+      ["luna://com.webos.service.connectionmanager/getstatus", {}],
+      ["luna://com.webos.service.wifi/getstatus", {}]
+    ])).then(function (results) {
+      if (run !== loadRun) { return; }
+      var applied = SettingsLogic.applyReadings(SPECS, state, results, touched, CHOICE_KEYS);
+      state = applied.state;
       loaded = true;
-      renderNetwork(results[7], results[8]);
+      renderNetwork(results[7] instanceof Error ? null : results[7], results[8] instanceof Error ? null : results[8]);
       Object.keys(SPECS).forEach(renderSetting);
-      if (editing) { editingStatus(); }
+      var failed = applied.failed;
+      if (failed) { setStatus("Could not read some settings: " + failed.message, "error"); }
+      else if (editing) { editingStatus(); }
       else { setStatus("Ready", "ok"); }
     }).catch(function (error) {
       setStatus("Could not read settings: " + error.message, "error");
@@ -170,6 +166,7 @@ var MinimalSettings = (function () {
   function writeSetting(key, value) {
     if (busy || value === undefined || value === state[key].value) { return; }
     busy = true;
+    touched[key] = true;
     var spec = SPECS[key];
     var element = elementFor(key);
     element.classList.add("is-busy");

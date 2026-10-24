@@ -33,6 +33,19 @@ echo "Packaging $id $version"
 [ -f "$app_dir/dist/$ipk" ] || { echo "Expected $app_dir/dist/$ipk was not built" >&2; exit 1; }
 
 home_redirect=0
+uploaded=0
+# If anything fails from here on, put the Home redirect back and remove the upload, so the Home key
+# doesn't open LG's own Home until the next reboot.
+cleanup() {
+  status=$?
+  if [ "$uploaded" = 1 ]; then tv "rm -f /tmp/$ipk" || true; fi
+  if [ "$status" != 0 ] && [ "$home_redirect" = 1 ]; then
+    echo "Reactivating Minimal Home after the failure" >&2
+    tv '/home/root/use-minimal-home.sh' >/dev/null || echo "Could not reactivate it; run /home/root/use-minimal-home.sh on the TV" >&2
+  fi
+}
+trap cleanup EXIT
+
 if [ "$id" = org.webosbrew.minimalhome ] && tv 'test -e /var/lib/webosbrew/init.d/50-minimal-home'; then
   home_redirect=1
   echo "Unmounting the Home redirect before upgrading"
@@ -40,6 +53,7 @@ if [ "$id" = org.webosbrew.minimalhome ] && tv 'test -e /var/lib/webosbrew/init.
 fi
 
 echo "Uploading"
+uploaded=1
 tv_upload "/tmp/$ipk" < "$app_dir/dist/$ipk"
 
 echo "Installing"
@@ -54,6 +68,7 @@ for _ in $(seq 30); do
   sleep 1
 done
 tv "rm -f /tmp/$ipk"
+uploaded=0
 if [ "$installed" != 1 ]; then
   if [ -z "$reply" ]; then
     echo "No reply from the TV's app manager. Stop and ask the user (see .claude/skills/webos-tv-app/SKILL.md)." >&2
@@ -68,6 +83,7 @@ echo "Installed $id $version"
 if [ "$home_redirect" = 1 ]; then
   echo "Reactivating Minimal Home (the screen may go black briefly)"
   tv '/home/root/use-minimal-home.sh' >/dev/null
+  home_redirect=0
 fi
 
 if [ "$launch" = 1 ]; then

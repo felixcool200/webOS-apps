@@ -1,5 +1,5 @@
-// The Settings view's rules for stepping through values, without the page. settings.js uses them;
-// test/settings-logic.test.js checks them in Node.
+// The Settings view's rules for reading and stepping through values, without the page. settings.js
+// uses them; test/settings-logic.test.js checks them in Node.
 var SettingsLogic = (function () {
   "use strict";
 
@@ -30,7 +30,31 @@ var SettingsLogic = (function () {
     return values[Math.max(0, Math.min(values.length - 1, index + direction))];
   }
 
-  return { allowedValues: allowedValues, nextValue: nextValue };
+  // Puts what one load read into the settings' state, and returns { state, failed }. `replies` are the
+  // load's replies in order: the picture, sound and option settings, then the values on offer for each
+  // of `choiceKeys`; an Error stands for a read that failed and leaves its settings as they were.
+  // Settings changed while the load ran (`touched`) keep their new value. Ranges are kept as numbers,
+  // although the TV reports them as text.
+  function applyReadings(specs, state, replies, touched, choiceKeys) {
+    var next = {};
+    Object.keys(state).forEach(function (key) { next[key] = Object.assign({}, state[key]); });
+    function reply(index) { return replies[index] instanceof Error ? null : replies[index]; }
+    [0, 1, 2].forEach(function (index) {
+      var read = (reply(index) && reply(index).settings) || {};
+      Object.keys(read).forEach(function (key) {
+        if (touched[key]) { return; }
+        var value = specs[key] && specs[key].kind === "range" ? Number(read[key]) : read[key];
+        next[key] = Object.assign({}, next[key], { value: value });
+      });
+    });
+    choiceKeys.forEach(function (key, index) {
+      if (next[key]) { next[key].values = allowedValues(reply(3 + index), next[key].value, specs[key].order); }
+    });
+    var failed = replies.slice(0, 3 + choiceKeys.length).filter(function (result) { return result instanceof Error; })[0] || null;
+    return { state: next, failed: failed };
+  }
+
+  return { allowedValues: allowedValues, nextValue: nextValue, applyReadings: applyReadings };
 }());
 
 if (typeof module !== "undefined") { module.exports = SettingsLogic; }

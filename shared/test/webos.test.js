@@ -55,3 +55,39 @@ test("rootShell rejects when the command fails", async () => {
   await assert.rejects(WebOS.rootShell("false"), /^Error: Command failed: false$/);
   delete global.window;
 });
+
+test("rootLunaBatch runs the calls in one root shell and returns each reply, or an Error, in order", async () => {
+  let commands = 0;
+  global.window = {
+    PalmServiceBridge: function () {
+      const bridge = this;
+      this.call = function (uri, payload) {
+        commands += 1;
+        const command = JSON.parse(payload).command;
+        const replies = ['{"returnValue":true,"settings":{"backlight":"80"}}', '{"returnValue":false,"errorText":"Unknown key"}', ""];
+        const out = replies.map((reply, index) => "--- reply " + index + "\n" + reply + "\n").join("");
+        setTimeout(() => bridge.onservicecallback(JSON.stringify({ returnValue: true, stdoutString: command.indexOf("& wait;") > 0 ? out : "" })), 0);
+      };
+    }
+  };
+  const replies = await WebOS.rootLunaBatch([["luna://a/b", {}], ["luna://c/d", { key: "x" }], ["luna://e/f", {}]]);
+  assert.strictEqual(commands, 1);
+  assert.deepStrictEqual(replies[0].settings, { backlight: "80" });
+  assert.match(replies[1].message, /Unknown key/);
+  assert.match(replies[2].message, /No response/);
+  delete global.window;
+});
+
+test("a call with its own timeout gives up after it, so a retry comes soon", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  global.window = { PalmServiceBridge: function () { this.call = function () {}; this.cancel = function () {}; } };
+  const call = WebOS.rootLuna("luna://com.webos.applicationManager/listApps", {}, 4000);
+  let settled = false;
+  call.catch(() => { settled = true; });
+  t.mock.timers.tick(3999);
+  await Promise.resolve();
+  assert.strictEqual(settled, false);
+  t.mock.timers.tick(1);
+  await assert.rejects(call, /No reply/);
+  delete global.window;
+});

@@ -27,5 +27,11 @@ var UI = (function () {
     else if (bottom > list.scrollTop + list.clientHeight) { list.scrollTop = bottom - list.clientHeight; }
   }
 
-  return { setStatus: setStatus, moveFocus: moveFocus, keepInView: keepInView };
+  // How many tiles a CSS grid shows per line (Infinity when it has no columns, such as while hidden).
+  function columnsOf(grid) {
+    var tracks = window.getComputedStyle(grid).gridTemplateColumns;
+    return tracks && tracks !== "none" ? tracks.split(" ").length : Infinity;
+  }
+
+  return { setStatus: setStatus, moveFocus: moveFocus, keepInView: keepInView, columnsOf: columnsOf };
 }());

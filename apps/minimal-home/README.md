@@ -32,6 +32,10 @@ The bindings are stored in `/home/root/.config/lginputhook/keybinds.json` and ap
 
 The page's rules (which buttons are listed, what they can do, reading presses from the hook's log) are in `app/remote-logic.js`, tested by `test/remote-logic.test.js`.
 
+## Startup
+
+Home shows the app list it read at the last start straight away (kept in `localStorage` as `home.appList`) while it asks the TV for the current one, and only redraws if that differs: the tiles appear about 0.35 s sooner (0.62 s instead of 0.97 s after the page starts, measured on the TV). A second after it comes on screen it reads what Settings, Remote buttons and Sources show, each in one root call that runs its Luna calls side by side (`WebOS.rootLunaBatch`): 5 root calls at start instead of 14, using about 40% less of the TV's processor for the same reads.
+
 ## Grid
 
 Home's apps, Tools and (while arranging) Hidden are one grid: Up/Down move a line at a time and between the sections at the same place across the screen, Left/Right move along a line and wrap at its ends, and Up from the top line reaches the Sources and Settings buttons. The same grid model (`gridNeighbor` and `moveInLayout` in `app/home-logic.js`) moves the focus and, while arranging, a picked-up app.

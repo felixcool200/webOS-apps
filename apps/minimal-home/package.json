@@ -1,6 +1,6 @@
 {
   "name": "webos-minimal-home",
-  "version": "0.3.37",
+  "version": "0.3.39",
   "private": true,
   "description": "A minimal launcher for rooted LG webOS TVs",
   "scripts": {

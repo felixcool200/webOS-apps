@@ -6,8 +6,6 @@ var Sources = (function () {
 
   var KEY = WebOS.KEY;
   var HINT = "OK switches to the input · Back returns Home";
-  // Tiles per row, as in the app grid (.grid in style.css).
-  var COLUMNS = 8;
   var sources = [];
   var selected = null;
   // The input selected last, so the focus stays on it when the list is read again.
@@ -80,13 +78,14 @@ var Sources = (function () {
     setFocus(box.querySelector('[data-source="' + focusId + '"]') || box.querySelector(".focusable"));
   }
 
-  // Reads the inputs and shows them. The ones shown stay if reading fails.
+  // Reads the inputs (in one root call) and shows them. The ones shown stay if reading fails.
   function load() {
-    return Promise.all([
-      WebOS.rootLuna("luna://com.webos.service.eim/getAllInputStatus", {}),
-      WebOS.rootLuna("luna://com.webos.service.eim/getLastInput", {}).catch(function () { return {}; })
-    ]).then(function (results) {
-      sources = SourcesLogic.list(results[0], results[1].lastSourceAppId);
+    return WebOS.rootLunaBatch([
+      ["luna://com.webos.service.eim/getAllInputStatus", {}],
+      ["luna://com.webos.service.eim/getLastInput", {}]
+    ]).then(function (replies) {
+      if (replies[0] instanceof Error) { throw replies[0]; }
+      sources = SourcesLogic.list(replies[0], replies[1] instanceof Error ? null : replies[1].lastSourceAppId);
       render();
     }).catch(function (error) {
       setHint("Could not read the inputs: " + error.message, "error");
@@ -99,13 +98,18 @@ var Sources = (function () {
     var key = event.keyCode;
     if (key === KEY.BACK) { return "leave"; }
     var list = tiles();
-    var index = list.indexOf(selected);
+    var directions = {};
+    directions[KEY.LEFT] = "left";
+    directions[KEY.RIGHT] = "right";
+    directions[KEY.UP] = "up";
+    directions[KEY.DOWN] = "down";
     if (key === KEY.ENTER) {
       if (selected && !event.repeat) { selected.click(); }
-    } else if (key === KEY.LEFT || key === KEY.RIGHT) {
-      setFocus(list[(index + (key === KEY.RIGHT ? 1 : -1) + list.length) % list.length]);
-    } else if (key === KEY.UP || key === KEY.DOWN) {
-      setFocus(list[index + (key === KEY.DOWN ? COLUMNS : -COLUMNS)]);
+    } else if (directions[key] && list.length) {
+      // The same grid as Home's, with the columns the grid shows.
+      var target = HomeLogic.gridNeighbor([{ count: list.length, columns: UI.columnsOf(document.getElementById("sources")) }],
+        { section: 0, index: Math.max(0, list.indexOf(selected)) }, directions[key]);
+      if (target) { setFocus(list[target.index]); }
     }
     return null;
   }
