@@ -92,7 +92,7 @@ scripts/deploy.sh apps/<name>
 
 The script reads `.env`, packages the app, uploads the IPK, installs it, waits until the TV reports the new version, then relaunches the app. Pass `--no-launch` to skip the relaunch. The `requiredACG` warning from `ares-package` is harmless for these local installs.
 
-For `apps/minimal-home` the script also unmounts the Home redirect before installing and puts it back afterwards if it was active (see "Upgrade Minimal Home safely" in the root README). Only when the redirect stub itself changed does it re-run `/home/root/use-minimal-home.sh`, which restarts the app manager (the screen goes black for a few seconds, and the next screensaver may hang; see "Why the screensaver hung").
+For `apps/minimal-home` the script also unmounts the Home redirect before installing and puts it back afterwards if it was active (see "Upgrade Minimal Home safely" in the root README). Only when the redirect stub itself changed does it reboot the TV, so the boot script restarts the app manager: restarting it in place while Minimal Home is on screen can leave the next screensaver hanging (see "Why the screensaver hung").
 
 ## Test
 

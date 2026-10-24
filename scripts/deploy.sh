@@ -43,13 +43,14 @@ fi
 home_redirect=0
 uploaded=0
 # If anything fails from here on, put the Home redirect back and remove the upload, so the Home key
-# doesn't open LG's own Home until the next reboot.
+# doesn't open LG's own Home until the next reboot. Only the mount: the app manager still has the stub
+# it read at boot, and restarting it can leave the screensaver hanging.
 cleanup() {
   status=$?
   if [ "$uploaded" = 1 ]; then tv "rm -f /tmp/$ipk" || true; fi
   if [ "$status" != 0 ] && [ "$home_redirect" = 1 ]; then
-    echo "Reactivating Minimal Home after the failure" >&2
-    tv '/home/root/use-minimal-home.sh' >/dev/null || echo "Could not reactivate it; run /home/root/use-minimal-home.sh on the TV" >&2
+    echo "Putting the Home redirect back after the failure" >&2
+    tv "sh $home_stub/replace-home.sh --keep-app-manager" || echo "Could not; reboot the TV to get Minimal Home back" >&2
   fi
 }
 trap cleanup EXIT
@@ -104,17 +105,21 @@ if [ "$id" = org.webosbrew.minimalhome ]; then
     cp /media/developer/apps/usr/palm/applications/$id/remote-hook/load-remote-hook.sh /var/lib/webosbrew/init.d/60-remote-buttons; fi"
 fi
 
-# Restarting the app manager can leave LG's screensaver hanging, so it only happens when the stub it
-# reads has changed.
+# The app manager only reads a changed stub when it restarts. Restarting it while Minimal Home is on
+# screen can leave the screensaver hanging (root README, "Why the screensaver hung"); at boot it is
+# safe, so a changed stub takes a reboot.
 if [ "$home_redirect" = 1 ]; then
+  tv "cp $home_stub/replace-home.sh /var/lib/webosbrew/init.d/50-minimal-home && chmod 755 /var/lib/webosbrew/init.d/50-minimal-home"
   if [ "$(stub_sum "$home_stub")" = "$stub_before" ]; then
     echo "Reactivating Minimal Home"
-    tv "cp $home_stub/replace-home.sh /var/lib/webosbrew/init.d/50-minimal-home && chmod 755 /var/lib/webosbrew/init.d/50-minimal-home && sh $home_stub/replace-home.sh --keep-app-manager"
+    tv "sh $home_stub/replace-home.sh --keep-app-manager"
+    home_redirect=0
   else
-    echo "Reactivating Minimal Home with its new stub (the screen may go black briefly)"
-    tv '/home/root/use-minimal-home.sh' >/dev/null
+    echo "Minimal Home's stub changed: rebooting the TV so the app manager reads it"
+    home_redirect=0
+    tv 'sync; (sleep 1; reboot) >/dev/null 2>&1 &'
+    exit 0
   fi
-  home_redirect=0
 fi
 
 if [ "$launch" = 1 ]; then
