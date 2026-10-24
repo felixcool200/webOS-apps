@@ -14,14 +14,16 @@
 //   fail: ["getSystemSettingValues:energySaving", "getSystemSettingDesc:picture", ...] reads that
 //     answer returnValue false
 // window.FAKE_TV keeps what happened: files, launched apps (with their params in `launches`),
-// settings written (`written` as [key, value], `writes` with their category and dimension), sleep
-// timers set (`sleep`, in minutes), Wi-Fi turned on or off (`wifi`), calls made.
+// settings written (`written` as [key, value], `writes` with their category, dimension and app_id),
+// resets (`resets`), sleep timers set (`sleep`, in minutes), Wi-Fi turned on or off (`wifi`), calls made.
+// Keys read or written with an app_id (TruMotion, the aspect ratio) keep one value, as this TV keeps
+// TruMotion for whatever plays.
 (function () {
   "use strict";
 
   var CONFIG = "/home/root/.config/lginputhook/keybinds.json";
   var BACKUP = CONFIG + ".before-test";
-  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], sleep: [], wifi: [], calls: [], counts: {}, ready: false };
+  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], resets: [], sleep: [], wifi: [], calls: [], counts: {}, ready: false };
 
   var APPS = [
     { id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" },
@@ -51,9 +53,12 @@
       sharpness: { dims: MODE, range: [0, 50] }, superResolution: { dims: MODE, choices: LEVELS },
       noiseReduction: { dims: MODE, choices: LEVELS.concat("auto") }, mpegNoiseReduction: { dims: MODE, choices: LEVELS.concat("auto") },
       smoothGradation: { dims: MODE, choices: LEVELS }, realCinema: { dims: MODE, choices: ["on", "off"] },
-      eyeComfortMode: { dims: [], choices: ["on", "off"] }, filmMakerMode: { dims: [], choices: ["on", "off"] }
+      eyeComfortMode: { dims: [], choices: ["on", "off"] }, filmMakerMode: { dims: [], choices: ["on", "off"] },
+      truMotionMode: { dims: MODE, choices: ["off", "cinemaClear", "natural", "smooth", "user"] }, truMotionJudder: { dims: MODE, range: [0, 10] },
+      applyToAllInput: { dims: MODE, choices: ["picture", "done"] }, energySavingAutoMin: { dims: [], range: [0, 10] }, erpUserConfirm: { dims: [] }
     },
     aiPicture: { ai_Brightness: { dims: MODE, choices: ["on", "off"] } },
+    aspectRatio: { arcPerApp: { dims: ["input", "twinMode"], choices: ["16x9", "original", "4x3"] } },
     sound: {
       soundMode: { dims: ["audioInput", "soundOutput"], choices: ["standard", "movie", "news"] },
       soundOutput: { dims: ["audioOutput"], choices: ["tv_speaker", "external_optical", "external_arc", "tv_external_speaker"] },
@@ -61,7 +66,9 @@
       autoVolume: SWITCH, avSyncSpeaker: DELAY, avSyncSpdif: DELAY, avSyncBtSurround: DELAY, avSyncWisa: DELAY,
       avSyncBypassInput: { dims: ["audioInput"], choices: ON_OFF }, digitalAudioPriority: { dims: [], choices: ["mpeg", "dolbyDigital", "auto"] },
       soundOutputDigital: { dims: ["audioInput"], choices: ["pcm", "auto", "passThrough"] }, lgSoundSync: SWITCH, ac4DialogueEnhancer: SWITCH,
-      tvPowerSound: SWITCH, audioDescription: SWITCH, audioDescriptionVolume: { dims: [], range: [-15, 15] }
+      tvPowerSound: SWITCH, audioDescription: SWITCH, audioDescriptionVolume: { dims: [], range: [-15, 15] },
+      applyToAllInputSSM: { dims: [], choices: ["sound", "done"] }, soundModeModified: { dims: ["soundMode", "soundOutput"], choices: ["true", "false"] },
+      userEqualizerValues: { dims: [], range: [-10, 10] }
     },
     time: {
       automaticStandBy: { dims: [], choices: ["0", "2", "4", "6", "8"] }, autoOff15Min: SWITCH, autoOff2HourOnTimer: SWITCH,
@@ -71,10 +78,18 @@
       quickStartMode: SWITCH, standByLight: SWITCH, screenSaverTimer: { dims: [], choices: ["3", "10", "20", "30"] },
       pointerSpeed: { dims: [], choices: ["slow", "normal", "fast"] }, pointerSize: { dims: [], choices: ["small", "medium", "large"] },
       livePlus: SWITCH, menuLanguage: { dims: [] }, highContrast: SWITCH, focusEmphasis: SWITCH, adjustments: { dims: [] },
-      subtitleLanguageFirst: { dims: [], choices: ["eng", "fin", "swe"] }, subtitleLanguageSecond: { dims: [], choices: ["eng", "fin", "swe"] }
+      subtitleLanguageFirst: { dims: [], choices: ["eng", "fin", "swe"] }, subtitleLanguageSecond: { dims: [], choices: ["eng", "fin", "swe"] },
+      audioGuidance: SWITCH, audioGuidanceSpeed: { dims: [], choices: ["slow", "medium", "fast"] },
+      audioGuidanceVolume: { dims: [], choices: ["low", "medium", "high"] }, audioGuidancePitch: { dims: [], choices: ["low", "medium", "high"] },
+      remoteSlowInput: SWITCH, longPressInterval: { dims: [], choices: ["basic", "1.5", "2"] }, repeatInterval: { dims: [], choices: ["basic", "0.5", "1"] },
+      screenMagnification: SWITCH
     },
-    general: { screenSaverAd: SWITCH, lmt: SWITCH },
-    network: { deviceName: { dims: [] } },
+    general: {
+      screenSaverAd: SWITCH, lmt: SWITCH, lifeOnScreenMode: { dims: [], choices: ["off", "lifeOnScreen", "alwaysReady", "allEnabled"] },
+      homeAutoLaunch: SWITCH, selectedInputApp: { dims: [], choices: ["off", "HDMI_1", "HDMI_2"] }, checkHomeAutoLaunchValue: { dims: [] }
+    },
+    other: { simplinkEnable: SWITCH },
+    network: { deviceName: { dims: [] }, wolwowlOnOff: { dims: [], choices: ["true", "false"] } },
     caption: { hardOfHearing: SWITCH }
   };
   // Values as the TV reports them, most ranges as text.
@@ -84,14 +99,17 @@
       dynamicContrast: "low", gamma: "high1", localDimming: "low", motionEyeCare: "off", color: "55", tint: "0", colorGamut: "native",
       dynamicColor: "low", sharpness: "25", superResolution: "off", noiseReduction: "off", mpegNoiseReduction: "off",
       smoothGradation: "low", realCinema: "on", eyeComfortMode: "off", filmMakerMode: "on",
-      pictureSettingModified: { normal: false, vivid: false, cinema: false, eco: false }
+      pictureSettingModified: { normal: false, vivid: false, cinema: false, eco: false },
+      truMotionMode: "natural", truMotionJudder: "0", applyToAllInput: "done", energySavingAutoMin: 5, erpUserConfirm: false
     },
     aiPicture: { ai_Brightness: "off" },
+    aspectRatio: { arcPerApp: "16x9" },
     sound: {
       soundMode: "standard", soundOutput: "tv_external_speaker", supportATMOS: "on", audioBalance: "0", tvSetupConfiguration: "stand",
       autoVolume: "off", avSyncSpeaker: "0", avSyncSpdif: "0", avSyncBtSurround: "0", avSyncWisa: "0", avSyncBypassInput: "off",
       digitalAudioPriority: "auto", soundOutputDigital: "auto", lgSoundSync: "off", ac4DialogueEnhancer: "off", tvPowerSound: "off",
-      audioDescription: "off", audioDescriptionVolume: "10"
+      audioDescription: "off", audioDescriptionVolume: "10", applyToAllInputSSM: "done", soundModeModified: "false",
+      userEqualizerValues: [0, 0, 0, 0, 0]
     },
     time: {
       automaticStandBy: "4", autoOff15Min: "on", autoOff2HourOnTimer: "on", autoClock: "on",
@@ -100,10 +118,13 @@
     option: {
       quickStartMode: "on", standByLight: "off", screenSaverTimer: "3", pointerSpeed: "slow", pointerSize: "small", livePlus: "off",
       menuLanguage: "eng", highContrast: "off", focusEmphasis: "off", adjustments: { blackAndWhite: "off", colorInversion: "off" },
-      subtitleLanguageFirst: "swe", subtitleLanguageSecond: "eng"
+      subtitleLanguageFirst: "swe", subtitleLanguageSecond: "eng", audioGuidance: "off", audioGuidanceSpeed: "fast",
+      audioGuidanceVolume: "medium", audioGuidancePitch: "medium", remoteSlowInput: "off", longPressInterval: "basic",
+      repeatInterval: "basic", screenMagnification: "off"
     },
-    general: { screenSaverAd: "off", lmt: "off" },
-    network: { deviceName: "[LG] webOS TV QNED80T6A" },
+    general: { screenSaverAd: "off", lmt: "off", lifeOnScreenMode: "none", homeAutoLaunch: "on", selectedInputApp: "off", checkHomeAutoLaunchValue: "default" },
+    other: { simplinkEnable: "off" },
+    network: { deviceName: "[LG] webOS TV QNED80T6A", wolwowlOnOff: "true" },
     caption: { hardOfHearing: "off" }
   };
 
@@ -112,7 +133,8 @@
     tv.ready = true;
     // Values written or set by the test, by category, key and dimension (storeKey).
     tv.values = {};
-    tv.now = Object.assign({ input: "default", dynamicRange: "sdr", audioInput: "media", soundOutput: "tv_external_speaker", audioOutput: "default" }, options().now);
+    tv.now = Object.assign({ input: "default", dynamicRange: "sdr", audioInput: "media", soundOutput: "tv_external_speaker", audioOutput: "default",
+      twinMode: "off" }, options().now);
     tv.sleepSeconds = options().sleepSeconds || 0;
     tv.wifiOn = !options().wifiOff;
     tv.files[CONFIG] = JSON.stringify(options().bindings || { "1038": { action: "ignore" } });
@@ -137,13 +159,15 @@
     return DESC[category] && DESC[category][key];
   }
 
-  function storeKey(category, key, dimension) {
+  function storeKey(category, key, dimension, appId) {
+    if (appId) { return category + "." + key + "@app"; }
     return category + "." + key + "|" + Object.keys(dimension).sort().map(function (field) { return field + "=" + dimension[field]; }).join(",");
   }
 
-  // A key's value in a dimension: written, set by the test for that input or for all, or the default.
-  function valueOf(category, key, dimension) {
-    var stored = tv.values[storeKey(category, key, dimension)];
+  // A key's value in a dimension (or for an app): written, set by the test for that input or for all,
+  // or the default.
+  function valueOf(category, key, dimension, appId) {
+    var stored = tv.values[storeKey(category, key, dimension, appId)];
     if (stored !== undefined) { return stored; }
     var forInput = dimension.input && ((options().inputSettings || {})[dimension.input] || {})[category];
     if (forInput && forInput[key] !== undefined) { return forInput[key]; }
@@ -181,7 +205,7 @@
     (payload.keys || []).forEach(function (key) {
       if (!fits(payload.category, key, payload.dimension)) { missing.push(key); return; }
       var full = dimensionOf(payload.category, key, payload.dimension);
-      settings[key] = valueOf(payload.category, key, full);
+      settings[key] = valueOf(payload.category, key, full, payload.app_id);
       Object.assign(dimension, full);
     });
     if (!Object.keys(settings).length) { return { returnValue: false, errorText: "There is no matched result from DB", category: payload.category }; }
@@ -214,17 +238,33 @@
     Object.keys(payload.settings).forEach(function (key) {
       if (!fits(payload.category, key, payload.dimension)) { failed.push(key); return; }
       var value = payload.settings[key];
-      tv.values[storeKey(payload.category, key, dimensionOf(payload.category, key, payload.dimension))] = typeof value === "number" ? String(value) : value;
+      tv.values[storeKey(payload.category, key, dimensionOf(payload.category, key, payload.dimension), payload.app_id)] = typeof value === "number" ? String(value) : value;
       tv.written.push([key, value]);
       var settings = {};
       settings[key] = value;
-      tv.writes.push({ category: payload.category, settings: settings, dimension: payload.dimension || null });
+      var write = { category: payload.category, settings: settings, dimension: payload.dimension || null };
+      if (payload.app_id) { write.app_id = payload.app_id; }
+      tv.writes.push(write);
       completed.push(key);
     });
     return failed.length ? { returnValue: false, method: "setSystemSettings", completed: completed, errorKey: failed } : { returnValue: true, method: "setSystemSettings" };
   }
 
-  var SETTINGS_METHODS = { getSystemSettings: readSettings, getSystemSettingDesc: describeSettings, setSystemSettings: writeSettings };
+  // resetSystemSettings: a picture mode of an input (`dimension`) or some keys back to their defaults.
+  function resetSettings(payload) {
+    tv.resets.push(payload);
+    Object.keys(tv.values).forEach(function (stored) {
+      var inCategory = stored.indexOf(payload.category + ".") === 0;
+      var dimension = payload.dimension && Object.keys(payload.dimension).every(function (field) {
+        return stored.indexOf(field + "=" + payload.dimension[field]) >= 0;
+      });
+      var named = payload.keys && payload.keys.some(function (key) { return stored.indexOf(payload.category + "." + key + "|") === 0; });
+      if (inCategory && (dimension || named) && stored.indexOf("pictureSettingModified") < 0) { delete tv.values[stored]; }
+    });
+    return { returnValue: true, method: "resetSystemSettings" };
+  }
+
+  var SETTINGS_METHODS = { getSystemSettings: readSettings, getSystemSettingDesc: describeSettings, setSystemSettings: writeSettings, resetSystemSettings: resetSettings };
 
   // The reply of a Luna call (an object), or null for a service the fake doesn't know.
   function lunaReply(uri, payload) {
@@ -266,6 +306,9 @@
       return { returnValue: true };
     }
     if (/systemproperty\/getSystemInfo$/.test(method)) { return { returnValue: true, modelName: "65QNED80T6A.BEUFLJP", firmwareVersion: "33.31.75" }; }
+    if (/audio\/getSoundOutput$/.test(method)) {
+      return { returnValue: true, soundOutput: valueOf("sound", "soundOutput", { audioOutput: tv.now.audioOutput }), settingsSoundOutputs: ["tv_external_speaker"] };
+    }
     if (/osInfo\/query$/.test(method)) { return { returnValue: true, webos_name: "webOS TV Lite", webos_release: "10.3.2" }; }
     if (/eim\/getAllInputStatus$/.test(method)) {
       var count = options().inputs || 3;

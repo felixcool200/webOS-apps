@@ -139,3 +139,61 @@ BrowserTest.define("Down to the last row scrolls it into view, and Right reaches
   t.key("LEFT");
   t.equal(t.focused(), row(t, "ai_Brightness"));
 });
+
+BrowserTest.define("TruMotion and aspect ratio show for the input that played last, are written per app, and hide for another", {
+  tv: { now: { input: "hdmi2" } }
+}, async (t) => {
+  await t.homeReady();
+  openPicture();
+  await pageReady(t);
+  t.equal(rowValue(t, "appliesTo"), "HDMI 2");
+  t.equal(rowValue(t, "arcPerApp"), "16:9");
+  focusRow(t, "truMotionMode");
+  t.equal(rowValue(t, "truMotionMode"), "Natural");
+  t.ok(row(t, "truMotionJudder").hidden, "de-judder shows with User Selection only");
+  t.key("OK");
+  t.key("RIGHT");
+  await t.until(() => t.tv().writes.length === 2, 3000, "the writes");
+  t.equal(t.tv().writes[0], { category: "picture", settings: { truMotionMode: "smooth" }, dimension: null, app_id: "org.webosbrew.minimalhome" });
+  t.equal(t.tv().writes[1].dimension, { input: "hdmi2" }, "and LG's (User Settings) flag for HDMI 2's mode");
+  await t.until(() => /Saved/.test(t.text("#picture-status")), 3000, "the reply");
+  t.key("OK");
+  for (let i = 0; i < 40 && t.focused() !== row(t, "appliesTo"); i += 1) { t.key("UP"); }
+  t.key("OK");
+  t.key("RIGHT");
+  await t.until(() => /Editing/.test(t.text("#picture-status")) && rowValue(t, "appliesTo") === "HDMI 3", 4000, "HDMI 3's settings");
+  t.ok(row(t, "truMotionMode").hidden && row(t, "arcPerApp").hidden, "only for the input that played last");
+});
+
+BrowserTest.define("the aspect ratio doesn't show for apps, and de-judder shows with TruMotion's User Selection", {
+  tv: { settings: { picture: { truMotionMode: "user" } } }
+}, async (t) => {
+  await t.homeReady();
+  openPicture();
+  await pageReady(t);
+  t.equal(rowValue(t, "appliesTo"), "Apps");
+  t.ok(row(t, "arcPerApp").hidden);
+  t.ok(!row(t, "truMotionJudder").hidden);
+});
+
+BrowserTest.define("resetting a picture mode asks for OK again, and clears the mode's (User Settings)", {
+  tv: { settings: { picture: { pictureSettingModified: { normal: true, vivid: false, cinema: false, eco: false } } } }
+}, async (t) => {
+  await t.homeReady();
+  openPicture();
+  await pageReady(t);
+  focusRow(t, "pictureReset");
+  t.key("OK");
+  t.equal(rowValue(t, "pictureReset"), "OK again");
+  t.match(t.text("#picture-status"), /OK again resets/);
+  t.key("UP");
+  t.key("DOWN");
+  t.equal(rowValue(t, "pictureReset"), "", "moving away cancels it");
+  t.key("OK");
+  t.key("OK");
+  await t.until(() => t.tv().resets.length === 1, 3000, "the reset");
+  t.equal(t.tv().resets[0], { category: "picture", dimension: { input: "default", pictureMode: "normal" } });
+  await t.until(() => t.tv().writes.length === 1, 3000, "the flag");
+  t.equal(t.tv().writes[0].settings.pictureSettingModified.normal, false);
+  await t.until(() => /Picture mode reset/.test(t.text("#picture-status")), 3000, "done");
+});

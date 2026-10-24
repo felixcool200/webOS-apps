@@ -79,18 +79,19 @@ var SettingsLogic = (function () {
   // Settings pages (settings-page.js). A page's state: `values` by key as last read or written,
   // `descs` by key (the TV's description: dims, visible, active, choices or range; made up for rows
   // from other services), `notes` by key (a line under the row, such as the time a sleep timer has
-  // left), and `context`: the dimension the page reads and writes in, such as { input, dynamicRange,
-  // pictureMode }. A page with "Applies to" chooses it; on other pages it is the one the TV named, and
-  // writes name none, as LG Settings' don't.
+  // left), `context`: the dimension the page reads and writes in, such as { input, dynamicRange,
+  // pictureMode }, and `now`: the one the TV was in when the page opened. A page with "Applies to"
+  // chooses its context; on other pages it is the one the TV named, and writes name none, as LG
+  // Settings' don't.
 
   function emptyPageState() {
-    return { values: {}, descs: {}, notes: {}, context: {} };
+    return { values: {}, descs: {}, notes: {}, context: {}, now: {} };
   }
 
   function copyState(state) {
     return {
       values: Object.assign({}, state.values), descs: Object.assign({}, state.descs),
-      notes: Object.assign({}, state.notes), context: Object.assign({}, state.context)
+      notes: Object.assign({}, state.notes), context: Object.assign({}, state.context), now: Object.assign({}, state.now)
     };
   }
 
@@ -104,10 +105,11 @@ var SettingsLogic = (function () {
   }
 
   // The settingsservice keys a page reads: its rows' and its `extra` keys (read for a rule or a write,
-  // not shown), but not rows from other services or links.
+  // not shown), but not rows from other services, links or actions without a key of their own.
   function readKeys(rows, page) {
     return rows.filter(function (row) { return row.key && row.category && !row.source; }).concat((page && page.extra) || []);
   }
+
 
   function categoriesOf(keys) {
     var categories = [];
@@ -117,14 +119,23 @@ var SettingsLogic = (function () {
 
   // The settingsservice operations that read a page in the context the TV is in now: per category,
   // the values and (unless `withDescs` is false) the descriptions. The values' replies name that
-  // context in `dimension`.
+  // context in `dimension`. A key LG reads and writes for an app (a row's `appId`) has a read of its
+  // own: on this TV TruMotion answers for whatever plays now whichever app is named, and the aspect
+  // ratio is one value for every input app (and one per web app), so pages read and write them only
+  // for the input that played last.
   function currentReads(rows, page, withDescs) {
     var keys = readKeys(rows, page);
     var operations = [];
     categoriesOf(keys).forEach(function (category) {
-      var names = keys.filter(function (item) { return item.category === category; }).map(function (item) { return item.key; });
-      operations.push({ method: "getSystemSettings", params: { category: category, keys: names } });
-      if (withDescs !== false) { operations.push({ method: "getSystemSettingDesc", params: { category: category, keys: names } }); }
+      var inCategory = keys.filter(function (item) { return item.category === category; });
+      var plain = inCategory.filter(function (item) { return !item.appId; }).map(function (item) { return item.key; });
+      if (plain.length) { operations.push({ method: "getSystemSettings", params: { category: category, keys: plain } }); }
+      inCategory.filter(function (item) { return item.appId; }).forEach(function (item) {
+        operations.push({ method: "getSystemSettings", params: { category: category, keys: [item.key], app_id: item.appId } });
+      });
+      if (withDescs !== false) {
+        operations.push({ method: "getSystemSettingDesc", params: { category: category, keys: inCategory.map(function (item) { return item.key; }) } });
+      }
     });
     return operations;
   }
@@ -151,6 +162,11 @@ var SettingsLogic = (function () {
     readKeys(rows, page).forEach(function (item) {
       var desc = state.descs[item.key];
       if (!desc) { return; }
+      if (item.appId) {
+        if (needing || state.context.input !== state.now.input) { return; }
+        operations.push({ method: "getSystemSettings", params: { category: item.category, keys: [item.key], app_id: item.appId } });
+        return;
+      }
       if (needing && desc.dims.indexOf(needing) < 0) { return; }
       var dimension = dimensionFor(desc.dims, state.context);
       if (dimension === undefined) { return; }
@@ -290,6 +306,8 @@ var SettingsLogic = (function () {
     return status;
   }
 
+  var SETTINGS_URI = "luna://com.webos.settingsservice/";
+
   var SOURCES = {
     sleepTimer: {
       reads: [["luna://com.webos.service.tvReservationAgent/timer/sleep/getRemainTime", {}]],
@@ -312,6 +330,75 @@ var SettingsLogic = (function () {
       },
       write: function (key, value) {
         return key === "wifiEnabled" ? ["luna://com.webos.service.connectionmanager/setstate", { wifi: value }] : null;
+      }
+    },
+    // Where the sound plays: the TV speaker, the outputs the audio service lists, and the one in use.
+    soundOut: {
+      reads: [["luna://com.webos.service.audio/getSoundOutput", {}]],
+      parse: function (replies) {
+        var reply = replies[0];
+        var choices = ["tv_speaker"];
+        (reply.settingsSoundOutputs || []).concat([reply.soundOutput]).forEach(function (output) {
+          if (output && choices.indexOf(output) < 0) { choices.push(output); }
+        });
+        return { values: { soundOutput: reply.soundOutput }, choices: { soundOutput: choices } };
+      },
+      write: function (key, value) {
+        return [SETTINGS_URI + "setSystemSettings", { category: "sound", settings: { soundOutput: value } }];
+      }
+    },
+    // Always Ready, on while LG's lifeOnScreenMode is allEnabled or alwaysReady. LG turns it on as
+    // allEnabled and, in Europe, records that the user agreed to the energy it uses (erpUserConfirm).
+    alwaysReady: {
+      reads: [[SETTINGS_URI + "getSystemSettings", { category: "general", keys: ["lifeOnScreenMode"] }]],
+      parse: function (replies) {
+        var mode = (replies[0].settings || {}).lifeOnScreenMode;
+        return { values: { alwaysReady: mode === undefined ? undefined : mode === "allEnabled" || mode === "alwaysReady" ? "on" : "off" },
+          choices: { alwaysReady: ["off", "on"] } };
+      },
+      write: function (key, value) {
+        var operations = [{ method: "setSystemSettings", params: { category: "general", settings: { lifeOnScreenMode: value === "on" ? "allEnabled" : "off" } } }];
+        if (value === "on") { operations.push({ method: "setSystemSettings", params: { category: "picture", settings: { erpUserConfirm: true } } }); }
+        return [SETTINGS_URI + "batch", { operations: operations }];
+      }
+    },
+    // Power On Screen: Home, or the input used last ("recent"), from homeAutoLaunch and
+    // selectedInputApp. LG offers single inputs only in China; one set there shows as it is.
+    powerOnScreen: {
+      reads: [[SETTINGS_URI + "getSystemSettings", { category: "general", keys: ["homeAutoLaunch", "selectedInputApp"] }]],
+      parse: function (replies) {
+        var settings = replies[0].settings || {};
+        var value = settings.homeAutoLaunch === undefined ? undefined : settings.homeAutoLaunch === "on" ? "home" :
+          settings.selectedInputApp && settings.selectedInputApp !== "off" ? settings.selectedInputApp : "recent";
+        var choices = ["home", "recent"];
+        if (value && choices.indexOf(value) < 0) { choices.push(value); }
+        return { values: { powerOnScreen: value }, choices: { powerOnScreen: choices } };
+      },
+      write: function (key, value) {
+        return [SETTINGS_URI + "setSystemSettings", { category: "general", settings: {
+          homeAutoLaunch: value === "home" ? "on" : "off", selectedInputApp: value === "home" || value === "recent" ? "off" : value,
+          checkHomeAutoLaunchValue: "user"
+        } }];
+      }
+    },
+    // Grayscale and Invert colours, the fields of LG's adjustments. LG turns Screen Zoom off first, then
+    // writes both fields (the other one off) with the high-contrast options off.
+    colourFilters: {
+      reads: [[SETTINGS_URI + "getSystemSettings", { category: "option", keys: ["adjustments"] }]],
+      parse: function (replies) {
+        var adjustments = (replies[0].settings || {}).adjustments;
+        if (!adjustments || typeof adjustments !== "object") { return { values: {} }; }
+        return { values: { grayscale: adjustments.blackAndWhite, invertColours: adjustments.colorInversion },
+          choices: { grayscale: ["off", "on"], invertColours: ["off", "on"] } };
+      },
+      write: function (key, value) {
+        return [SETTINGS_URI + "batch", { operations: [
+          { method: "setSystemSettings", params: { category: "option", settings: { screenMagnification: "off" } } },
+          { method: "setSystemSettings", params: { category: "option", settings: {
+            adjustments: { blackAndWhite: key === "grayscale" ? value : "off", colorInversion: key === "invertColours" ? value : "off" },
+            highContrast: "off", focusEmphasis: "off"
+          } } }
+        ] }];
       }
     },
     tvInfo: {
@@ -383,12 +470,14 @@ var SettingsLogic = (function () {
     }
   };
 
-  // A rule on another key's value, such as { key: "energySaving", values: ["auto", "max"] }, or on a
-  // field of an object value ({ key: "adjustments", field: "blackAndWhite", values: ["on"] }).
-  function holds(rule, values) {
-    var value = values[rule.key];
+  // A rule on another key's value, such as { key: "energySaving", values: ["auto", "max"] }, on a
+  // field of an object value ({ key: "adjustments", field: "blackAndWhite", values: ["on"] }), or on
+  // a field of the page's context ({ context: "input", values: ["default"] }). With `except` instead
+  // of `values`, it holds for any other value.
+  function holds(rule, state) {
+    var value = rule.context ? state.context[rule.context] : state.values[rule.key];
     if (rule.field) { value = value && typeof value === "object" ? value[rule.field] : undefined; }
-    return rule.values.indexOf(value) >= 0;
+    return rule.values ? rule.values.indexOf(value) >= 0 : rule.except.indexOf(value) < 0;
   }
 
   // How a row shows. Hidden when the TV doesn't offer it, or its showWhen rule fails or its hideWhen
@@ -400,21 +489,25 @@ var SettingsLogic = (function () {
     if (row.kind === "link") { return { hidden: false, greyed: false, reason: "", text: "›", note: "", perInput: false }; }
     var desc = state.descs[row.key];
     var value = state.values[row.key];
-    var hidden = !desc || !desc.visible || value === undefined ||
-      (row.showWhen && !holds(row.showWhen, state.values)) || (row.hideWhen && holds(row.hideWhen, state.values));
+    var action = row.kind === "action";
+    var hidden = (action ? row.category && (!desc || !desc.visible) : !desc || !desc.visible || value === undefined) ||
+      (row.appId && state.now && state.context.input !== state.now.input) ||
+      (row.showWhen && !holds(row.showWhen, state)) || (row.hideWhen && holds(row.hideWhen, state));
     var view = { hidden: !!hidden, greyed: false, reason: "", value: value, note: (state.notes && state.notes[row.key]) || "" };
     if (view.hidden) { return view; }
     var rules = Array.isArray(row.greyedWhen) ? row.greyedWhen : row.greyedWhen ? [row.greyedWhen] : [];
-    var rule = rules.filter(function (each) { return holds(each, state.values); })[0];
+    var rule = rules.filter(function (each) { return holds(each, state); })[0];
     if (rule) {
       view.greyed = true;
       view.reason = rule.reason;
-    } else if (!desc.active) {
+    } else if (desc && !desc.active) {
       view.greyed = true;
       view.reason = "Not available now";
     }
-    view.perInput = desc.dims.indexOf("input") >= 0;
-    if (row.kind === "info") {
+    view.perInput = !!desc && desc.dims.indexOf("input") >= 0;
+    if (action) {
+      view.text = "";
+    } else if (row.kind === "info") {
       view.text = row.format ? FORMATS[row.format](value) : labelFor(row, value);
     } else if (row.kind === "range") {
       var range = desc.range || { min: 0, max: 100 };
@@ -437,8 +530,11 @@ var SettingsLogic = (function () {
   }
 
   // Whether changing a row to this value asks first (OK again writes it), as turning Wi-Fi off does.
-  function needsConfirm(row, value) {
-    return !!(row.confirm && row.confirm.values.indexOf(value) >= 0);
+  // A row with confirm.any asks before its first change each time it is being changed (`confirmed`
+  // once it was), as LG asks before Minimum Brightness.
+  function needsConfirm(row, value, confirmed) {
+    if (!row.confirm) { return false; }
+    return row.confirm.any ? !confirmed : row.confirm.values.indexOf(value) >= 0;
   }
 
   // The settingsservice operations that write a row's new value, with the settings LG writes with it
@@ -446,27 +542,72 @@ var SettingsLogic = (function () {
   // from the context, and the first change of a picture mode's settings also sets LG's flag that marks
   // the mode "(User Settings)", as LG Settings does; the TV keeps the flags per input, so they take an
   // operation of their own. Null when the context can't target the row yet.
+  function modeFlagOperation(state, value) {
+    var flags = state.values.pictureSettingModified;
+    var mode = state.context.pictureMode;
+    if (!flags || typeof flags !== "object" || mode === undefined || state.context.input === undefined || flags[mode] === value) { return null; }
+    var marked = Object.assign({}, flags);
+    marked[mode] = value;
+    return { method: "setSystemSettings", params: { category: "picture", settings: { pictureSettingModified: marked }, dimension: { input: state.context.input } } };
+  }
+
   function writeOperations(row, value, state, page) {
     var desc = state.descs[row.key];
     if (!desc || row.source) { return null; }
     var targeted = !!(page && page.context);
-    var dimension = targeted ? dimensionFor(desc.dims, state.context) : null;
+    var dimension = targeted && !row.appId ? dimensionFor(desc.dims, state.context) : null;
     if (dimension === undefined) { return null; }
     var settings = {};
     settings[row.key] = value;
     Object.assign(settings, row["with"] || {});
     var write = { category: row.category, settings: settings };
     if (dimension) { write.dimension = dimension; }
+    if (row.appId) { write.app_id = row.appId; }
     var operations = [{ method: "setSystemSettings", params: write }];
-    var flags = state.values.pictureSettingModified;
-    var mode = state.context.pictureMode;
-    if (targeted && row.category === "picture" && desc.dims.indexOf("pictureMode") >= 0 && flags && typeof flags === "object" &&
-        flags[mode] === false && state.context.input !== undefined) {
-      var marked = Object.assign({}, flags);
-      marked[mode] = true;
-      operations.push({ method: "setSystemSettings", params: { category: "picture", settings: { pictureSettingModified: marked }, dimension: { input: state.context.input } } });
-    }
+    var flag = targeted && row.category === "picture" && desc.dims.indexOf("pictureMode") >= 0 ? modeFlagOperation(state, true) : null;
+    if (flag) { operations.push(flag); }
     return operations;
+  }
+
+  // The settings LG's sound reset restores, by sound mode.
+  function soundResetKeys(mode) {
+    if (mode === "standard") { return ["audioBalance", "userEqualizerValues", "soundModeModified"]; }
+    if (mode === "game") { return ["audioBalance", "gameTVEqualizer", "gameTVEqualizer10band", "soundModeModified"]; }
+    return ["audioBalance", "soundModeModified"];
+  }
+
+  // The settingsservice operations of an action row, as LG Settings runs them: `write` sets settings
+  // (in the page's context on a page with "Applies to", as Apply to All Inputs copies that input's
+  // mode); reset "picture" restores the context's picture mode on its input and clears the mode's
+  // "(User Settings)" flag; reset "sound" restores the current sound mode's settings. Null when the
+  // context can't target it yet.
+  function actionOperations(row, state, page) {
+    var action = row.action;
+    if (action.write) {
+      var write = { category: row.category, settings: action.write };
+      var desc = state.descs[row.key];
+      if (page && page.context && desc && desc.dims.length) {
+        var dimension = dimensionFor(desc.dims, state.context);
+        if (!dimension) { return null; }
+        write.dimension = dimension;
+      }
+      return [{ method: "setSystemSettings", params: write }];
+    }
+    if (action.reset === "picture") {
+      if (state.context.input === undefined || state.context.pictureMode === undefined) { return null; }
+      var operations = [{ method: "resetSystemSettings", params: { category: "picture", dimension: { input: state.context.input, pictureMode: state.context.pictureMode } } }];
+      var flag = modeFlagOperation(state, false);
+      if (flag) { operations.push(flag); }
+      return operations;
+    }
+    return [{ method: "resetSystemSettings", params: { category: "sound", keys: soundResetKeys(state.values.soundMode) } }];
+  }
+
+  // Throws the first failure in the replies of a settingsservice batch.
+  function checkResults(results) {
+    (results || []).forEach(function (result) {
+      if (result && result.returnValue === false) { throw new Error(result.errorText || "Not changed"); }
+    });
   }
 
   // The state after the TV answered a write's operations (results in order): the row's new value and
@@ -506,7 +647,7 @@ var SettingsLogic = (function () {
   // What a row applies to, for the card: on a page with "Applies to", every input or the input (and
   // picture mode) chosen; elsewhere, keys the TV keeps per input or output change what plays now.
   function scopeText(row, view, state, page, inputs, modeLabels) {
-    if (!view || view.hidden || row.kind === "link" || row.source) { return ""; }
+    if (!view || view.hidden || row.kind === "link" || row.source || !state.descs[row.key]) { return ""; }
     var desc = state.descs[row.key];
     if (!page.context) { return desc && desc.dims.length ? "Applies to what is playing now" : ""; }
     if (!view.perInput) { return "Applies to every input"; }
@@ -526,7 +667,8 @@ var SettingsLogic = (function () {
     contextReads: contextReads, applyReads: applyReads, contextFor: contextFor, fillContext: fillContext, labelFor: labelFor,
     sleepTimerFrom: sleepTimerFrom, networkStatus: networkStatus, sourceCalls: sourceCalls, applySources: applySources,
     SOURCES: SOURCES, sourceWrite: sourceWrite, rowView: rowView, nextRowValue: nextRowValue, needsConfirm: needsConfirm,
-    writeOperations: writeOperations, applyWrite: applyWrite, inputChoices: inputChoices, scopeText: scopeText
+    writeOperations: writeOperations, soundResetKeys: soundResetKeys, actionOperations: actionOperations, checkResults: checkResults,
+    applyWrite: applyWrite, inputChoices: inputChoices, scopeText: scopeText
   };
 }());
 

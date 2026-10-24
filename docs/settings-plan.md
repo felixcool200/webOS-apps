@@ -1,6 +1,6 @@
 # Plan: Minimal Home's Settings covering LG's Settings
 
-Status: Phases 1 to 6 are built, in Minimal Home 0.3.51: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages. Phase 7 (rows with care, actions and per-app keys) is not. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
+Status: all phases are built, in Minimal Home 0.3.52: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages, with Phase 7's rows. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
 
 ## Decisions and checks (2026-10-24)
 
@@ -18,6 +18,15 @@ Status: Phases 1 to 6 are built, in Minimal Home 0.3.51: the hub and the Picture
 - **The sleep timer (Phase 3, checked on the TV):** `getRemainTime` answers the time left as `sleepTimeMinute` and `sleepTimeSecond` (9 and 58 two seconds after a 10 minute timer), not as seconds in all; with no timer only `sleepTimeSecond: 0`. `add` with `"10"` and `"0"` set and cancelled it.
 - **LG's targets:** `picture`, `sound`, `general`, `EnergySaving`, `accessibility`, `TVInformation` and `SoftwareUpdate` are all in LG Settings' target table (`oV`). The screen capture leaves out LG Settings' overlay, so the panels it opens were not seen; `com.webos.app.firstuse-overlay` with `{target: "network"}` opened LG's Internet Connection screen.
 - **The hub:** one-line link rows (6.4vh) keep both columns above the footer: five quick rows and two Minimal Home links on the left, seven page links and the LG card on the right.
+
+Phase 7 (checked on the TV on 2026-10-24, each change set back):
+
+- **TruMotion** (`truMotionMode`): written with `{input: "hdmi3", pictureMode: "eco"}` it didn't read back that way; read with any `app_id` it answers, and written for YouTube it changed for every app and input. So the TV keeps one TruMotion for what plays, and Home reads and writes it with an `app_id` for the input that played last only. De-Judder (`truMotionJudder`) shows under TruMotion's User Selection, as in LG.
+- **Aspect ratio** (`arcPerApp`, category `aspectRatio`): written for `com.webos.app.hdmi3` it also changed HDMI 2 and live TV, while web apps kept their own (`original`). Home shows it for the input that played last, and not for apps (it can't tell which app you came from).
+- **Resets:** `resetSystemSettings` runs inside `settingsservice/batch`. A picture reset of HDMI 3's Eco (`{input, pictureMode}`; `_3dStatus` doesn't exist on this TV, and LG passes it only when it does) left every value as it was, and a sound reset of `audioBalance` and `soundModeModified` kept 0. LG offers the sound reset only in Standard (this TV lacks `supportSoundWizard`), with the keys of `soundResetKeys`.
+- **Apply to all inputs** (`applyToAllInput: "picture"`, `applyToAllInputSSM: "sound"`) was not tried: it would copy one input's mode over the others'. Home writes it as LG does, the picture one with the chosen input's dimension.
+- **Always Ready:** on is `lifeOnScreenMode` `allEnabled` or `alwaysReady` (now `none`); LG turns it on as `allEnabled` and in Europe records `erpUserConfirm: true` (already true here). **Power on screen:** `homeAutoLaunch` and `selectedInputApp` with `checkHomeAutoLaunchValue: "user"` (it exists: `"default"`); single inputs are China-only. **Sound out:** the TV speaker and `audio/getSoundOutput`'s `settingsSoundOutputs`, written to `soundOutput`. **Grayscale and Invert colours:** LG writes `screenMagnification: "off"`, then `adjustments` with `highContrast` and `focusEmphasis` off.
+- **SIMPLINK, Turn on via Wi-Fi (Mobile TV On), Minimum brightness, Screen zoom, Audio guidance and Extend pressing time** are plain keys; Turn on via Wi-Fi and Minimum brightness ask first, as LG does. Extend pressing time changes how long OK must be held to arrange Home's apps; that wasn't tried on the TV.
 
 ## Summary
 

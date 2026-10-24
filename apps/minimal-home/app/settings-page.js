@@ -51,8 +51,12 @@ var SettingsPage = (function () {
     // Values asked for and not written yet, by key, and the key being written.
     var pending = {};
     var writing = null;
-    // A value that asks first (row.confirm), shown until OK writes it or anything else drops it.
+    // A value that asks first (row.confirm), shown until OK writes it or anything else drops it; the
+    // row whose first change was confirmed while it is being changed (confirm.any); and the action row
+    // that the first OK armed, which the second runs.
     var proposed = null;
+    var confirmedKey = null;
+    var armed = null;
 
     function setStatus(message, type) {
       UI.setStatus(id + "-status", message, type);
@@ -70,7 +74,7 @@ var SettingsPage = (function () {
     function shown() {
       var values = Object.assign({}, state.values, pending);
       if (proposed) { values[proposed.key] = proposed.value; }
-      return { values: values, descs: state.descs, notes: state.notes, context: state.context };
+      return { values: values, descs: state.descs, notes: state.notes, context: state.context, now: state.now };
     }
 
     function inputName(input) {
@@ -150,8 +154,8 @@ var SettingsPage = (function () {
       if (info.hidden) { return; }
       node.classList.toggle("is-greyed", info.greyed);
       node.classList.toggle("is-busy", writing === row.key);
-      node.classList.toggle("is-proposed", !!proposed && proposed.key === row.key);
-      node.querySelector(".value").textContent = info.text;
+      node.classList.toggle("is-proposed", (!!proposed && proposed.key === row.key) || armed === row.key);
+      node.querySelector(".value").textContent = armed === row.key ? "OK again" : info.text;
       node.querySelector("small").textContent = info.note || (page.context && !info.perInput && row.kind !== "link" ? "Every input" : "");
       if (row.kind === "range") { node.querySelector(".range").style.setProperty("--fill", info.fill + "%"); }
       renderDirections(node, row, info);
@@ -214,6 +218,10 @@ var SettingsPage = (function () {
     // scroll: false when the pointer moved the focus, so the list doesn't move under it.
     function setFocus(node, scroll) {
       if (!node) { return; }
+      if (armed && node !== elementFor(armed)) {
+        armed = null;
+        renderAll();
+      }
       selected = UI.moveFocus(selected, node);
       if (node !== lgButton && scroll !== false) {
         var margin = Math.ceil(window.innerHeight * 0.006);
@@ -260,6 +268,18 @@ var SettingsPage = (function () {
       } else if (row.kind === "info") {
         setStatus(row.label + " is shown here; change it in LG Settings");
         return;
+      } else if (row.kind === "action") {
+        var action = SettingsLogic.rowView(row, shown());
+        // An action works on what the TV has, so a change still being written goes first.
+        if (writing || Object.keys(pending).length) { setStatus("Still saving, try again in a moment"); }
+        else if (action.greyed) { setStatus(action.reason, "error"); }
+        else if (armed === key) { runAction(row); }
+        else {
+          armed = key;
+          renderAll();
+          setStatus(row.confirm.prompt, "error");
+        }
+        return;
       } else {
         if (switching) {
           setStatus("Reading " + inputName(state.context.input) + "…");
@@ -282,6 +302,7 @@ var SettingsPage = (function () {
     function stopEditing(showReady) {
       if (!editing) { return; }
       proposed = null;
+      confirmedKey = null;
       editing.classList.remove("is-editing");
       editing = null;
       updateHints(false);
@@ -289,17 +310,44 @@ var SettingsPage = (function () {
       if (showReady !== false) { setStatus("Ready", "ok"); }
     }
 
-    // OK while changing a value: writes a value that asked first, else stops changing.
+    // OK while changing a value: writes a value that asked first (and goes on changing a row that asks
+    // only before its first change), else stops changing.
     function confirmOrStop() {
       if (proposed) {
+        var row = rowFor(proposed.key);
         pending[proposed.key] = proposed.value;
         touched[proposed.key] = true;
         proposed = null;
-        stopEditing(false);
+        if (row.confirm.any) {
+          confirmedKey = row.key;
+          renderAll();
+        } else {
+          stopEditing(false);
+        }
         flush();
         return;
       }
       stopEditing();
+    }
+
+    // Runs an action row (Apply to All Inputs, a reset), which the first OK armed, then reads the
+    // page again.
+    function runAction(row) {
+      armed = null;
+      var operations = SettingsLogic.actionOperations(row, state, page);
+      renderAll();
+      if (!operations) {
+        setStatus("Could not run " + row.label + ": the input isn't known yet", "error");
+        return;
+      }
+      setStatus(row.label + "…");
+      WebOS.rootLuna(SETTINGS + "batch", { operations: operations }).then(function (reply) {
+        SettingsLogic.checkResults(reply.results);
+        setStatus(row.done, "ok");
+        refresh();
+      }).catch(function (error) {
+        setStatus("Could not run " + row.label + ": " + error.message, "error");
+      });
     }
 
     function change(direction) {
@@ -316,7 +364,7 @@ var SettingsPage = (function () {
       if (info.greyed) { return; }
       var value = SettingsLogic.nextRowValue(row, info, direction);
       if (value === undefined || value === info.value) { return; }
-      if (SettingsLogic.needsConfirm(row, value)) {
+      if (SettingsLogic.needsConfirm(row, value, confirmedKey === key)) {
         proposed = { key: key, value: value };
         renderAll();
         setStatus(row.confirm.prompt, "error");
@@ -358,6 +406,7 @@ var SettingsPage = (function () {
         if (operations) {
           state = SettingsLogic.applyWrite(state, row, value, operations, reply.results);
         } else {
+          SettingsLogic.checkResults(reply.results);
           state.values[key] = value;
         }
         if (pending[key] === value) { delete pending[key]; }
@@ -407,6 +456,7 @@ var SettingsPage = (function () {
           if (withDescs) {
             current = applied.dimension;
             state.context = Object.assign({}, current);
+            state.now = Object.assign({}, current);
           }
         }
         var fromSources = SettingsLogic.applySources(state, rows, results.slice(operations.length ? 1 : 0), touched);

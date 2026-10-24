@@ -370,3 +370,112 @@ test("a time zone shows its city and name", () => {
     descs: { timeZone: { dims: [], visible: true, active: true } }, notes: {}, context: {} };
   assert.strictEqual(SettingsLogic.rowView(row, state).text, "Stockholm · Central European Time");
 });
+
+// Phase 7: rows LG keeps per app, action rows, and settings with more than one key behind them.
+const PER_APP = {
+  context: "picture",
+  extra: [{ key: "pictureSettingModified", category: "picture" }],
+  sections: [{ title: "Motion", rows: [
+    { key: "truMotionMode", category: "picture", kind: "choice", appId: "org.webosbrew.minimalhome" },
+    { key: "arcPerApp", category: "aspectRatio", kind: "choice", appId: "com.webos.app.livetv", hideWhen: { context: "input", values: ["default"] } },
+    { key: "sharpness", category: "picture", kind: "range" },
+    { key: "applyToAllInput", category: "picture", kind: "action", action: { write: { applyToAllInput: "picture" } }, confirm: { prompt: "?" }, done: "!" },
+    { key: "pictureReset", kind: "action", action: { reset: "picture" }, confirm: { prompt: "?" }, done: "!" }
+  ] }]
+};
+const PER_APP_ROWS = SettingsLogic.pageRows(PER_APP);
+const perAppState = (context, now) => ({
+  values: { truMotionMode: "natural", arcPerApp: "16x9", sharpness: 25, applyToAllInput: "done", pictureSettingModified: { eco: true, normal: false } },
+  descs: { truMotionMode: { dims: MODE, visible: true, active: true, choices: [{ value: "natural" }, { value: "smooth" }] },
+    arcPerApp: { dims: ["input", "twinMode"], visible: true, active: true, choices: [{ value: "16x9" }, { value: "4x3" }] },
+    sharpness: { dims: MODE, visible: true, active: true, range: { min: 0, max: 50 } },
+    applyToAllInput: { dims: MODE, visible: true, active: true, choices: [] }, pictureSettingModified: { dims: ["input"], visible: true, active: true } },
+  notes: {}, context: context, now: now
+});
+
+test("keys LG keeps per app are read and written with an app id, and show only for the input that played last", () => {
+  assert.deepStrictEqual(SettingsLogic.currentReads(PER_APP_ROWS, PER_APP).filter((operation) => operation.params.app_id), [
+    { method: "getSystemSettings", params: { category: "picture", keys: ["truMotionMode"], app_id: "org.webosbrew.minimalhome" } },
+    { method: "getSystemSettings", params: { category: "aspectRatio", keys: ["arcPerApp"], app_id: "com.webos.app.livetv" } }
+  ]);
+  const playing = perAppState({ input: "hdmi2", pictureMode: "eco" }, { input: "hdmi2", pictureMode: "eco" });
+  assert.deepStrictEqual(PER_APP_ROWS.slice(0, 2).map((row) => SettingsLogic.rowView(row, playing).hidden), [false, false]);
+  assert.deepStrictEqual(SettingsLogic.writeOperations(PER_APP_ROWS[0], "smooth", playing, PER_APP)[0].params,
+    { category: "picture", settings: { truMotionMode: "smooth" }, app_id: "org.webosbrew.minimalhome" }, "no dimension: the TV keeps it for what plays");
+  const other = perAppState({ input: "hdmi3", pictureMode: "eco" }, { input: "hdmi2", pictureMode: "eco" });
+  assert.deepStrictEqual(PER_APP_ROWS.slice(0, 2).map((row) => SettingsLogic.rowView(row, other).hidden), [true, true]);
+  assert.strictEqual(SettingsLogic.contextReads(PER_APP_ROWS, PER_APP, other).some((operation) => operation.params.app_id), false);
+  assert.strictEqual(SettingsLogic.contextReads(PER_APP_ROWS, PER_APP, playing).filter((operation) => operation.params.app_id).length, 2);
+  const apps = perAppState({ input: "default", pictureMode: "normal" }, { input: "default", pictureMode: "normal" });
+  assert.deepStrictEqual(PER_APP_ROWS.slice(0, 2).map((row) => SettingsLogic.rowView(row, apps).hidden), [false, true], "no aspect ratio for apps");
+});
+
+test("Apply to all inputs copies the chosen input's mode; a picture reset also clears the mode's (User Settings)", () => {
+  const state = perAppState({ input: "hdmi3", pictureMode: "eco", dynamicRange: "sdr" }, { input: "hdmi2" });
+  assert.deepStrictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[3], state, PER_APP), [
+    { method: "setSystemSettings", params: { category: "picture", settings: { applyToAllInput: "picture" }, dimension: { input: "hdmi3", pictureMode: "eco" } } }
+  ]);
+  assert.deepStrictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], state, PER_APP), [
+    { method: "resetSystemSettings", params: { category: "picture", dimension: { input: "hdmi3", pictureMode: "eco" } } },
+    { method: "setSystemSettings", params: { category: "picture", settings: { pictureSettingModified: { eco: false, normal: false } }, dimension: { input: "hdmi3" } } }
+  ]);
+  const unchanged = Object.assign({}, state, { context: { input: "hdmi3", pictureMode: "normal" } });
+  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], unchanged, PER_APP).length, 1, "the flag is already off");
+  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], perAppState({ input: "hdmi3" }, {}), PER_APP), null, "the mode isn't known yet");
+  const view = SettingsLogic.rowView(PER_APP_ROWS[4], state);
+  assert.deepStrictEqual([view.hidden, view.text], [false, ""], "an action without a key of its own shows");
+});
+
+test("the sound reset restores LG's keys for the sound mode, which only Standard offers", () => {
+  const reset = { key: "soundReset", kind: "action", action: { reset: "sound" }, greyedWhen: { key: "soundMode", except: ["standard"], reason: "Standard only" } };
+  const standard = { values: { soundMode: "standard" }, descs: {}, notes: {}, context: {}, now: {} };
+  assert.deepStrictEqual(SettingsLogic.actionOperations(reset, standard, {}),
+    [{ method: "resetSystemSettings", params: { category: "sound", keys: ["audioBalance", "userEqualizerValues", "soundModeModified"] } }]);
+  assert.deepStrictEqual(SettingsLogic.soundResetKeys("movie"), ["audioBalance", "soundModeModified"]);
+  assert.strictEqual(SettingsLogic.rowView(reset, standard).greyed, false);
+  assert.strictEqual(SettingsLogic.rowView(reset, Object.assign({}, standard, { values: { soundMode: "movie" } })).reason, "Standard only");
+  assert.throws(() => SettingsLogic.checkResults([{ returnValue: true }, { returnValue: false, errorText: "Busy" }]), /Busy/);
+  assert.doesNotThrow(() => SettingsLogic.checkResults(undefined));
+});
+
+test("a row that asks before its first change asks once while it is being changed", () => {
+  const row = { key: "energySavingAutoMin", kind: "range", confirm: { any: true, prompt: "?" } };
+  assert.strictEqual(SettingsLogic.needsConfirm(row, 4, false), true);
+  assert.strictEqual(SettingsLogic.needsConfirm(row, 3, true), false);
+});
+
+test("Sound out offers the TV speaker and the outputs the audio service lists", () => {
+  const rows = [{ key: "soundOutput", source: "soundOut", kind: "choice" }];
+  const { state } = SettingsLogic.applySources(SettingsLogic.emptyPageState(), rows,
+    [{ soundOutput: "tv_external_speaker", settingsSoundOutputs: ["tv_external_speaker"] }], {});
+  assert.deepStrictEqual(SettingsLogic.rowView(rows[0], state).values, ["tv_speaker", "tv_external_speaker"]);
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[0], "tv_speaker"),
+    ["luna://com.webos.settingsservice/setSystemSettings", { category: "sound", settings: { soundOutput: "tv_speaker" } }]);
+});
+
+test("Always Ready and Power on screen are made of LG's keys and written as LG writes them", () => {
+  const rows = [{ key: "alwaysReady", source: "alwaysReady", kind: "choice" }, { key: "powerOnScreen", source: "powerOnScreen", kind: "choice" }];
+  const read = (mode, home, input) => SettingsLogic.applySources(SettingsLogic.emptyPageState(), rows, [
+    { settings: { lifeOnScreenMode: mode } }, { settings: { homeAutoLaunch: home, selectedInputApp: input } }
+  ], {}).state.values;
+  assert.deepStrictEqual(read("none", "on", "off"), { alwaysReady: "off", powerOnScreen: "home" });
+  assert.deepStrictEqual(read("alwaysReady", "off", "off"), { alwaysReady: "on", powerOnScreen: "recent" });
+  assert.deepStrictEqual(read("allEnabled", "off", "HDMI_2"), { alwaysReady: "on", powerOnScreen: "HDMI_2" });
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[0], "on")[1].operations.map((operation) => operation.params.settings),
+    [{ lifeOnScreenMode: "allEnabled" }, { erpUserConfirm: true }]);
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[0], "off")[1].operations.map((operation) => operation.params.settings), [{ lifeOnScreenMode: "off" }]);
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[1], "recent")[1].settings,
+    { homeAutoLaunch: "off", selectedInputApp: "off", checkHomeAutoLaunchValue: "user" });
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[1], "home")[1].settings,
+    { homeAutoLaunch: "on", selectedInputApp: "off", checkHomeAutoLaunchValue: "user" });
+});
+
+test("grayscale turns screen zoom off first, then writes both colour filters with high contrast off", () => {
+  const rows = [{ key: "grayscale", source: "colourFilters", kind: "choice" }, { key: "invertColours", source: "colourFilters", kind: "choice" }];
+  const { state } = SettingsLogic.applySources(SettingsLogic.emptyPageState(), rows, [{ settings: { adjustments: { blackAndWhite: "off", colorInversion: "on" } } }], {});
+  assert.deepStrictEqual([state.values.grayscale, state.values.invertColours], ["off", "on"]);
+  assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[0], "on")[1].operations.map((operation) => operation.params.settings), [
+    { screenMagnification: "off" },
+    { adjustments: { blackAndWhite: "on", colorInversion: "off" }, highContrast: "off", focusEmphasis: "off" }
+  ]);
+});

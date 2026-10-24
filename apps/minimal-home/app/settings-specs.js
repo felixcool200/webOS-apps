@@ -60,6 +60,19 @@ var SettingsSpecs = (function () {
     { key: "adjustments", field: "colorInversion", values: ["on"], reason: "Invert colours is on (in LG Settings)" }
   ];
   var FILTERS_OFF = { adjustments: { blackAndWhite: "off", colorInversion: "off" } };
+  var TRUMOTION = { off: "Off", cinemaClear: "Cinematic Movement", natural: "Natural", smooth: "Smooth Movement", clear: "Clear", user: "User Selection" };
+  var ASPECT = {
+    "16x9": "16:9", original: "Original", full_wide: "Full Wide", "4x3": "4:3", "14x9": "14:9", "21x9": "21:9", zoom: "Zoom",
+    zoom2: "Zoom 2", cinema_zoom: "Cinema Zoom", vertZoom: "Vertical Zoom", allDirZoom: "4-Way Zoom", just_scan: "Just Scan"
+  };
+  var SPEED = { verySlow: "Very slow", slow: "Slow", medium: "Medium", fast: "Fast", veryFast: "Very fast" };
+  var LEVEL = { veryLow: "Very low", low: "Low", medium: "Medium", high: "High", veryHigh: "Very high" };
+  var SECONDS = { basic: "Basic", "0.5": "0.5 s", "1": "1 s", "1.5": "1.5 s", "2": "2 s", "2.5": "2.5 s", "3": "3 s", "3.5": "3.5 s",
+    "4": "4 s", "4.5": "4.5 s", "5": "5 s" };
+  // TruMotion and the aspect ratio are read and written for an app (settings-logic.js, currentReads):
+  // any app for TruMotion, and an input app for the inputs' aspect ratio.
+  var HOME_APP = "org.webosbrew.minimalhome";
+  var INPUT_APP = "com.webos.app.livetv";
 
   // The inputs picture settings are kept for, by the name settingsservice gives them; HDMI inputs are
   // named by the TV.
@@ -74,8 +87,11 @@ var SettingsSpecs = (function () {
   // `format`) or link (`launch`: { id, params }); label, help, value labels, order (of the choices);
   // greyedWhen: a rule or rules { key, field, values, reason } that grey it out while another key has
   // one of those values; showWhen and hideWhen: rules that show or hide it; `with`: settings LG writes
-  // together with it; confirm: { values, prompt } to ask before writing those values; and reread: true
-  // when a change alters what the other rows show.
+  // together with it; confirm: { values, prompt } to ask before writing those values, or { any: true,
+  // prompt } before the first change; reread: true when a change alters what the other rows show; and
+  // appId for a key LG reads and writes for an app, shown only for the input that played last. An
+  // action row (kind action) runs `action` ({ write: settings } or { reset: "picture" | "sound" }) on a
+  // second OK, then says `done`.
   var PAGES = {
     picture: {
       title: "Picture",
@@ -131,7 +147,17 @@ var SettingsSpecs = (function () {
           { key: "smoothGradation", category: "picture", kind: "choice", label: "Smooth gradation", labels: LEVELS,
             help: "Smooths banding in colour gradients." },
           { key: "realCinema", category: "picture", kind: "choice", label: "Real Cinema", labels: ON_OFF,
-            help: "Shows films at their own frame rate, as in a cinema." }
+            help: "Shows films at their own frame rate, as in a cinema." },
+          { key: "truMotionMode", category: "picture", kind: "choice", label: "TruMotion", labels: TRUMOTION, appId: HOME_APP,
+            help: "Smooths fast-moving scenes. The TV keeps one TruMotion for what is playing, so it shows only for the input that played last." },
+          { key: "truMotionJudder", category: "picture", kind: "range", label: "De-judder", step: 1,
+            showWhen: { key: "truMotionMode", values: ["user"] }, hideWhen: { key: "truMotionMode", except: ["user"] },
+            help: "Reduces judder in moving images, with TruMotion set to User Selection." }
+        ] },
+        { title: "Screen", rows: [
+          { key: "arcPerApp", category: "aspectRatio", kind: "choice", label: "Aspect ratio", labels: ASPECT, appId: INPUT_APP,
+            hideWhen: { context: "input", values: ["default"] },
+            help: "The shape of the picture on the screen. The TV keeps one for the inputs and one per app, so it shows only for the input that played last, and not for apps." }
         ] },
         { title: "Options", rows: [
           { key: "eyeComfortMode", category: "picture", kind: "choice", label: "Reduce blue light", labels: ON_OFF,
@@ -140,6 +166,14 @@ var SettingsSpecs = (function () {
             help: "Switches to FILMMAKER MODE by itself when what you watch asks for it." },
           { key: "ai_Brightness", category: "aiPicture", kind: "choice", label: "AI brightness", labels: ON_OFF,
             help: "Adjusts dark areas to the light around the TV and to what you watch." }
+        ] },
+        { title: "Copy and reset", rows: [
+          { key: "applyToAllInput", category: "picture", kind: "action", label: "Apply to all inputs", action: { write: { applyToAllInput: "picture" } },
+            confirm: { prompt: "OK again copies this picture mode's settings to the same mode of every input" }, done: "Applied to all inputs",
+            help: "Copies the settings of this input's picture mode to the same picture mode of every other input." },
+          { key: "pictureReset", kind: "action", label: "Reset picture mode", action: { reset: "picture" },
+            confirm: { prompt: "OK again resets this picture mode's settings to LG's defaults" }, done: "Picture mode reset",
+            help: "Returns the settings of this input's picture mode to LG's defaults." }
         ] }
       ]
     },
@@ -151,8 +185,8 @@ var SettingsSpecs = (function () {
         { title: "Mode", rows: [
           { key: "soundMode", category: "sound", kind: "choice", label: "Sound mode", labels: SOUND_MODES, reread: true,
             help: "The sound mode for the input playing now and the sound output in use." },
-          { key: "soundOutput", category: "sound", kind: "info", label: "Sound out", labels: SOUND_OUTPUTS,
-            help: "Where the TV plays its sound. LG Settings lists the devices connected and switches between them." }
+          { key: "soundOutput", source: "soundOut", kind: "choice", label: "Sound out", labels: SOUND_OUTPUTS, reread: true,
+            help: "Where the TV plays its sound: the TV speaker or the outputs the TV lists as connected. Bluetooth and other devices are paired in LG Settings." }
         ] },
         { title: "Output", rows: [
           { key: "supportATMOS", category: "sound", kind: "choice", label: "Dolby Atmos", labels: ON_OFF,
@@ -191,6 +225,15 @@ var SettingsSpecs = (function () {
             help: "Plays TV sound through a device on the optical output, and sets its volume with the remote." },
           { key: "ac4DialogueEnhancer", category: "sound", kind: "choice", label: "AC-4 dialogue enhancer", labels: ON_OFF,
             help: "Makes dialogue clearer in video with AC-4 audio." }
+        ] },
+        { title: "Copy and reset", rows: [
+          { key: "applyToAllInputSSM", category: "sound", kind: "action", label: "Apply to all inputs", action: { write: { applyToAllInputSSM: "sound" } },
+            confirm: { prompt: "OK again uses this sound mode's settings for every input" }, done: "Applied to all inputs",
+            help: "Uses the settings of this sound mode for every input." },
+          { key: "soundReset", kind: "action", label: "Reset sound mode", action: { reset: "sound" },
+            greyedWhen: { key: "soundMode", except: ["standard"], reason: "Only the Standard sound mode can be reset, as in LG Settings" },
+            confirm: { prompt: "OK again resets this sound mode's effects to LG's defaults" }, done: "Sound mode reset",
+            help: "Returns the balance and equaliser of the sound mode to LG's defaults." }
         ] }
       ]
     },
@@ -235,10 +278,23 @@ var SettingsSpecs = (function () {
         ] },
         { title: "Energy", rows: [
           { key: "energySaving", category: "picture", kind: "choice", label: "Energy saving", labels: ENERGY_SAVING,
-            order: ["auto", "off", "min", "med", "max"],
-            help: "Controls the screen's brightness to reduce the energy used. Auto and Maximum set the panel brightness." }
+            order: ["auto", "off", "min", "med", "max"], reread: true,
+            help: "Controls the screen's brightness to reduce the energy used. Auto and Maximum set the panel brightness." },
+          { key: "energySavingAutoMin", category: "picture", kind: "range", label: "Minimum brightness", showWhen: { key: "energySaving", values: ["auto"] },
+            confirm: { any: true, prompt: "Energy use may rise. OK to change it anyway" },
+            help: "How dark Energy saving Auto may make the screen when it is brighter than the room." }
+        ] },
+        { title: "Power on", rows: [
+          { key: "powerOnScreen", source: "powerOnScreen", kind: "choice", label: "Power on screen", labels: { home: "Home", recent: "Recent input" },
+            help: "What the TV shows when it turns on: Home (Minimal Home) or the input used last." }
         ] },
         { title: "Standby", rows: [
+          { key: "alwaysReady", source: "alwaysReady", kind: "choice", label: "Always Ready", labels: ON_OFF,
+            confirm: { values: ["on"], prompt: "Always Ready uses more energy in standby. OK again turns it on" },
+            help: "Keeps the TV ready in standby, for voice and a picture when the screen is off. It uses more energy." },
+          { key: "wolwowlOnOff", category: "network", kind: "choice", label: "Turn on via Wi-Fi", labels: { "true": "On", "false": "Off" },
+            confirm: { values: ["true"], prompt: "Energy use in standby may rise. OK again turns it on" },
+            help: "Lets a phone app turn the TV on over Wi-Fi (Mobile TV On). It may use more energy in standby." },
           { key: "quickStartMode", category: "option", kind: "choice", label: "Quick Start+", labels: ON_OFF, order: ["off", "on"],
             help: "Keeps the TV in a standby that wakes faster and starts apps and search sooner. It uses more energy." },
           { key: "standByLight", category: "option", kind: "choice", label: "Standby light", labels: ON_OFF,
@@ -262,6 +318,10 @@ var SettingsSpecs = (function () {
             help: "How fast the Magic Remote's pointer moves." },
           { key: "pointerSize", category: "option", kind: "choice", label: "Pointer size", labels: { small: "Small", medium: "Medium", large: "Large" },
             help: "The size of the Magic Remote's pointer." }
+        ] },
+        { title: "Devices", rows: [
+          { key: "simplinkEnable", category: "other", kind: "choice", label: "SIMPLINK (HDMI-CEC)", labels: ON_OFF,
+            help: "Lets the TV and HDMI devices control each other: their power, and the remote working them." }
         ] },
         { title: "Privacy", rows: [
           { key: "livePlus", category: "option", kind: "choice", label: "Live Plus", labels: ON_OFF,
@@ -291,9 +351,23 @@ var SettingsSpecs = (function () {
             help: "Makes the text of LG's menus clearer by changing its colours. Minimal Home keeps its own." },
           { key: "focusEmphasis", category: "option", kind: "choice", label: "Focus with high contrast", labels: ON_OFF,
             "with": FILTERS_OFF, greyedWhen: COLOUR_FILTERS,
-            help: "Highlights the focused item in LG's menus more strongly." }
+            help: "Highlights the focused item in LG's menus more strongly." },
+          { key: "grayscale", source: "colourFilters", kind: "choice", label: "Grayscale", labels: ON_OFF,
+            help: "Turns the whole screen black and white. Turns Invert colours, Screen zoom and the high-contrast options off." },
+          { key: "invertColours", source: "colourFilters", kind: "choice", label: "Invert colours", labels: ON_OFF,
+            help: "Inverts the colours of the screen. Turns Grayscale, Screen zoom and the high-contrast options off." },
+          { key: "screenMagnification", category: "option", kind: "choice", label: "Screen zoom", labels: ON_OFF, "with": FILTERS_OFF,
+            help: "Lets you zoom into the screen: hold the Home button to start, and again to stop or change it." }
         ] },
         { title: "Audio", rows: [
+          { key: "audioGuidance", category: "option", kind: "choice", label: "Audio guidance", labels: ON_OFF,
+            help: "Reads LG's menus and what is on screen aloud." },
+          { key: "audioGuidanceSpeed", category: "option", kind: "choice", label: "Guidance speed", labels: SPEED,
+            showWhen: { key: "audioGuidance", values: ["on"] }, help: "How fast audio guidance speaks." },
+          { key: "audioGuidanceVolume", category: "option", kind: "choice", label: "Guidance volume", labels: LEVEL,
+            showWhen: { key: "audioGuidance", values: ["on"] }, help: "How loud audio guidance speaks." },
+          { key: "audioGuidancePitch", category: "option", kind: "choice", label: "Guidance pitch", labels: LEVEL,
+            showWhen: { key: "audioGuidance", values: ["on"] }, help: "How high audio guidance speaks." },
           { key: "tvPowerSound", category: "sound", kind: "choice", label: "Device power sound", labels: ON_OFF,
             help: "Plays a sound when the TV turns on or off. Not with digital sound output set to Pass Through." },
           { key: "audioDescription", category: "sound", kind: "choice", label: "Audio description", labels: ON_OFF,
@@ -308,6 +382,14 @@ var SettingsSpecs = (function () {
             help: "The subtitles shown when a broadcast lacks the first language." },
           { key: "hardOfHearing", category: "caption", kind: "choice", label: "Hard of hearing", labels: ON_OFF,
             help: "Shows the sound of broadcasts as subtitles, where they offer it." }
+        ] },
+        { title: "Remote", rows: [
+          { key: "remoteSlowInput", category: "option", kind: "choice", label: "Extend pressing time", labels: ON_OFF,
+            help: "Changes how long a button must be held before it counts as held, and how fast it repeats. Holding OK to arrange Home's apps changes with it." },
+          { key: "longPressInterval", category: "option", kind: "choice", label: "Long press time", labels: SECONDS,
+            showWhen: { key: "remoteSlowInput", values: ["on"] }, help: "How long a button must be held to count as held." },
+          { key: "repeatInterval", category: "option", kind: "choice", label: "Repeat interval", labels: SECONDS,
+            showWhen: { key: "remoteSlowInput", values: ["on"] }, help: "How fast a held button repeats." }
         ] }
       ]
     },

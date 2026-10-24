@@ -177,3 +177,91 @@ BrowserTest.define("the hub's sleep timer row sets the timer, and the links show
   await t.until(() => t.tv().sleep.length === 1, 3000, "the write");
   t.equal(t.tv().sleep, [20]);
 });
+
+BrowserTest.define("Sound out switches among the TV speaker and the outputs the TV lists", {}, async (t) => {
+  await t.homeReady();
+  openView("sound");
+  await viewReady(t, "sound");
+  focusPageRow(t, "sound", "soundOutput");
+  t.key("OK");
+  t.key("LEFT");
+  await t.until(() => t.tv().writes.length === 1, 3000, "the write");
+  t.equal(t.tv().writes[0], { category: "sound", settings: { soundOutput: "tv_speaker" }, dimension: null });
+  t.equal(pageValue(t, "sound", "soundOutput"), "TV Speaker");
+  await t.until(() => pageRow(t, "sound", "avSyncSpeaker") && !pageRow(t, "sound", "avSyncSpeaker").hidden, 3000, "the delay of the TV speaker");
+});
+
+BrowserTest.define("only the Standard sound mode can be reset, as in LG Settings", { tv: { settings: { sound: { soundMode: "movie" } } } }, async (t) => {
+  await t.homeReady();
+  openView("sound");
+  await viewReady(t, "sound");
+  focusPageRow(t, "sound", "soundReset");
+  t.ok(pageRow(t, "sound", "soundReset").classList.contains("is-greyed"));
+  t.key("OK");
+  t.key("OK");
+  await t.wait(300);
+  t.equal(t.tv().resets, []);
+  for (let i = 0; i < 40 && t.focused() !== pageRow(t, "sound", "soundMode"); i += 1) { t.key("UP"); }
+  t.key("OK");
+  t.key("LEFT");
+  await t.until(() => t.tv().written.length === 1 && /Saved/.test(t.text("#sound-status")), 3000, "Standard");
+  t.key("OK");
+  focusPageRow(t, "sound", "soundReset");
+  await t.until(() => !pageRow(t, "sound", "soundReset").classList.contains("is-greyed"), 3000, "the reset free");
+  t.key("OK");
+  t.key("OK");
+  await t.until(() => t.tv().resets.length === 1, 3000, "the reset");
+  t.equal(t.tv().resets[0], { category: "sound", keys: ["audioBalance", "userEqualizerValues", "soundModeModified"] });
+});
+
+BrowserTest.define("minimum brightness asks before its first change, then follows the keys", { tv: { settings: { picture: { energySaving: "auto" } } } }, async (t) => {
+  await t.homeReady();
+  openView("power");
+  await viewReady(t, "power");
+  focusPageRow(t, "power", "energySavingAutoMin");
+  t.key("OK");
+  t.key("LEFT");
+  t.match(t.text("#power-status"), /Energy use may rise/);
+  await t.wait(300);
+  t.equal(t.tv().writes, [], "nothing yet");
+  t.key("OK");
+  await t.until(() => t.tv().writes.length === 1, 3000, "the first change");
+  t.ok(pageRow(t, "power", "energySavingAutoMin").classList.contains("is-editing"), "still changing it");
+  t.key("LEFT");
+  await t.until(() => t.tv().writes.length === 2, 3000, "the second, without asking");
+  t.equal(t.tv().written, [["energySavingAutoMin", 4], ["energySavingAutoMin", 3]]);
+});
+
+BrowserTest.define("Always Ready asks before turning on and records the agreement LG asks for; Power on screen sets LG's keys", {}, async (t) => {
+  await t.homeReady();
+  openView("power");
+  await viewReady(t, "power");
+  focusPageRow(t, "power", "powerOnScreen");
+  t.equal(pageValue(t, "power", "powerOnScreen"), "Home");
+  t.key("OK");
+  t.key("RIGHT");
+  await t.until(() => t.tv().written.length === 3, 3000, "the write");
+  t.equal(t.tv().written, [["homeAutoLaunch", "off"], ["selectedInputApp", "off"], ["checkHomeAutoLaunchValue", "user"]]);
+  t.key("OK");
+  t.key("DOWN");
+  t.equal(t.focused(), pageRow(t, "power", "alwaysReady"));
+  t.key("OK");
+  t.key("RIGHT");
+  t.match(t.text("#power-status"), /OK again turns it on/);
+  t.key("OK");
+  await t.until(() => t.tv().written.length === 5, 3000, "the write");
+  t.equal(t.tv().written.slice(3), [["lifeOnScreenMode", "allEnabled"], ["erpUserConfirm", true]]);
+});
+
+BrowserTest.define("grayscale turns screen zoom off, then writes the colour filters with high contrast off", {}, async (t) => {
+  await t.homeReady();
+  openView("accessibility");
+  await viewReady(t, "accessibility");
+  focusPageRow(t, "accessibility", "grayscale");
+  t.key("OK");
+  t.key("RIGHT");
+  await t.until(() => t.tv().written.length === 4, 3000, "the writes");
+  t.equal(t.tv().written, [["screenMagnification", "off"], ["adjustments", { blackAndWhite: "on", colorInversion: "off" }],
+    ["highContrast", "off"], ["focusEmphasis", "off"]]);
+  await t.until(() => pageRow(t, "accessibility", "highContrast").classList.contains("is-greyed"), 4000, "high contrast greyed after the re-read");
+});
