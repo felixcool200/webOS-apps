@@ -180,7 +180,7 @@ To undo it, run the same command without `org.webosbrew.minimalhome` and reboot.
 
 ### LG's background preloads
 
-LG's preload manager (`preload-manager.service`) keeps some apps from a fixed list loaded in the background so they open faster, and loads them again after the memory manager closes them; each such background start flashes the app's splash. `luna://com.webos.service.preloadmanager/getPreloadPolicy` shows the list. On 2026-10-24 AirPlay and LG Channels were taken off it, since they aren't used here (YouTube and Netflix stay): `setPreloadPolicy` with `{"application":{"id":"<app id>","isAllowed":false}}` stops it until the next boot, and `"<app id>":false` in `allowedApps` of `/var/preferences/webos-preload-manager-conf.json` keeps it that way. The file as it was is next to it as `webos-preload-manager-conf.json.before-minimal-suite`; copy it back and reboot to undo.
+LG's preload manager (`preload-manager.service`) keeps some apps from a fixed list loaded in the background so they open faster, and loads them again after the memory manager closes them; each such background start flashes the app's splash. `luna://com.webos.service.preloadmanager/getPreloadPolicy` shows the list. On 2026-10-24 AirPlay, LG Channels and Netflix were taken off it (YouTube, used daily, stays; Netflix is used about once a month and can start cold): `setPreloadPolicy` with `{"application":{"id":"<app id>","isAllowed":false}}` stops it until the next boot, and `"<app id>":false` in `allowedApps` of `/var/preferences/webos-preload-manager-conf.json` keeps it that way. The file as it was is next to it as `webos-preload-manager-conf.json.before-minimal-suite`; copy it back and reboot to undo.
 
 ### Screensaver watchdog
 
