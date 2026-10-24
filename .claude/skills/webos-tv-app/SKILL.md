@@ -92,7 +92,7 @@ scripts/deploy.sh apps/<name>
 
 The script reads `.env`, packages the app, uploads the IPK, installs it, waits until the TV reports the new version, then relaunches the app. Pass `--no-launch` to skip the relaunch. The `requiredACG` warning from `ares-package` is harmless for these local installs.
 
-For `apps/minimal-home` the script also unmounts the Home redirect before installing and puts it back afterwards if it was active (see "Upgrade Minimal Home safely" in the root README). Only when the redirect stub itself changed does it re-run `/home/root/use-minimal-home.sh`, which restarts the app manager (the screen goes black for a few seconds, and the next screensaver may hang; see "Screensaver watchdog").
+For `apps/minimal-home` the script also unmounts the Home redirect before installing and puts it back afterwards if it was active (see "Upgrade Minimal Home safely" in the root README). Only when the redirect stub itself changed does it re-run `/home/root/use-minimal-home.sh`, which restarts the app manager (the screen goes black for a few seconds, and the next screensaver may hang; see "Why the screensaver hung").
 
 ## Test
 
@@ -129,7 +129,7 @@ Then ask what is on the screen. Known causes:
 - **TV in standby or screensaver:** SSH can still answer while launched apps don't appear. `com.webos.app.screensaver` in the launch log points to this. Ask the user to wake the TV.
 - **A system pop-up on screen:** an alert (`com.webos.app.alert` in the log) can sit in front of the app. Ask the user to dismiss it.
 - **App manager restarting:** `use-minimal-home.sh` restarts it, and calls fail for about 10 seconds. Wait once, then ask.
-- **Screensaver that keys can't end:** check `getPowerState` for `"processing": "Screen Saver Ready"` and `/tmp/screensaver-watchdog.log` (see "Screensaver watchdog" in the root README). Closing `com.webos.app.screensaver` with `applicationManager/closeByAppId` clears the screen; only a reboot clears tvpowerd.
+- **Screensaver that keys can't end:** check `getPowerState` for `"processing": "Screen Saver Ready"`. It follows a forced restart of the app manager (see "Why the screensaver hung" in the root README); closing `com.webos.app.screensaver` with `applicationManager/closeByAppId` clears the screen, but only a reboot clears tvpowerd.
 - **Low memory:** the TV has about 1.2 GB of RAM and usually runs close to the limit. webOS may kill or reload apps (Minimal Home `autoReload` in the log). Check `free -m`, and ask the user before closing other apps.
 - **Load average around 28 is normal:** chip driver threads count as load without using CPU. It doesn't mean the TV is overloaded.
 

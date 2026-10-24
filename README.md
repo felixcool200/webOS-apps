@@ -134,7 +134,7 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
   'sh /media/developer/apps/usr/palm/applications/org.webosbrew.minimalhome/appstub/replace-home.sh --keep-app-manager'
 ```
 
-`--keep-app-manager` puts the redirect back without restarting the app manager, which already read the stub. That is only right if the stub's `appinfo.json` and `index.html` are unchanged; otherwise run `/home/root/use-minimal-home.sh`, which restarts it. `deploy.sh` compares the two before and after installing and picks the right one. Restarting the app manager is best avoided: twice, the next screensaver hung afterwards (see "Screensaver watchdog").
+`--keep-app-manager` puts the redirect back without restarting the app manager, which already read the stub. That is only right if the stub's `appinfo.json` and `index.html` are unchanged; otherwise run `/home/root/use-minimal-home.sh`, which restarts it. `deploy.sh` compares the two before and after installing and picks the right one. Restarting the app manager is best avoided: it can leave the next screensaver hanging (see "Why the screensaver hung").
 
 ## Remote button hook
 
@@ -172,7 +172,7 @@ When an app starts cold (it isn't running), LG's memory manager (`memchute`) clo
 Why a splash stays on screen (found on 2026-10-24; LG's code is in `/usr/lib/qml/WebOSCompositor`, and its log lines are kept when `luna://com.webos.pmlogd/setAllowDevLog` is on and land in `/var/log/dbg-log` when it is turned off again):
 
 1. The splash webOS shows while an app starts cold (`splashBackground`) is one view with one app id (`views/StarfishImageSplash.qml`). It closes when that app's window opens (`onSurfaceOpened` compares the id), when the app stops, or after 120 s.
-2. The window manager handles every `splash` event from the app manager twice, so `open()` runs twice per launch (two `open, StarfishImageSplash Image path...` lines per launch in the log).
+2. After a forced restart of the app manager (see "Why the screensaver hung" below), the window manager is sometimes subscribed to the app manager's `getAppLifeEvents` twice (`ls-monitor -s`: in 8 of 18 restarts), and then handles every `splash` event twice, so `open()` runs twice per launch (two `open, StarfishImageSplash Image path...` lines per launch in the log). With a single subscription it runs once and nothing sticks.
 3. When the splash image is still decoded in Qt's image cache, the first `open()` starts showing it at once. The second `open()` then calls `wiper.skipToClosedLeft()`, whose `onClosed` clears the app id (`if (wiperAppId === splashAppId) splashAppId = ""`, logged as `splashAppId is invalid`), and shows the splash again without an id, so the app's window never closes it.
 4. Our splash is a small 192x108 image, which stays cached for about 30 s after it was last used: by that app's previous splash, or by the window manager starting the app in the background. Full-size 1920x1080 splashes, like Homebrew Channel's and LG's, are not kept.
 
@@ -191,8 +191,15 @@ To undo it, run the same command without `org.webosbrew.minimalhome` and reboot.
 
 LG's preload manager (`preload-manager.service`) keeps some apps from a fixed list loaded in the background so they open faster, and loads them again after the memory manager closes them. `luna://com.webos.service.preloadmanager/getPreloadPolicy` shows the list. Taking apps off it (on 2026-10-24, when memory looked like a cause of the stuck splash, which it wasn't) was undone the same day: `setPreloadPolicy` only lasts until the next boot, and editing `/var/preferences/webos-preload-manager-conf.json` had no effect, so the file and every app's `isEnabled` are back as LG had them.
 
-### Screensaver watchdog
+### Why the screensaver hung
 
-Twice (on 2026-10-23 and 2026-10-24) LG's power service, tvpowerd, started the screensaver and then waited for it forever: `luna://com.webos.service.tvpower/power/getPowerState` kept reporting `"processing": "Screen Saver Ready"` instead of switching to `"state": "Screen Saver"`, and every key, power included, was ignored until a reboot. The second time it happened three minutes after a Minimal Home deploy had restarted the app manager, which is the likely trigger.
+Twice (on 2026-10-23 and 2026-10-24) LG's power service, tvpowerd, started the screensaver and then waited for it forever: `luna://com.webos.service.tvpower/power/getPowerState` kept reporting `"processing": "Screen Saver Ready"`, every key, power included, was ignored, `turnOnScreen` answered `com.webos.service.tvpower/power is busy`, and only a reboot cleared it. Found on 2026-10-24 with LG's own log lines (`luna://com.webos.pmlogd/setAllowDevLog`, dumped to `/var/log/dbg-log`):
 
-Minimal Home's boot script starts `app/boot/screensaver-watchdog.sh`, which follows the power state (a `getPowerState` subscription, so it costs nothing while nothing changes). If tvpowerd waits like this for 15 s, it closes the screensaver app and logs the power state before and after to `/tmp/screensaver-watchdog.log` on the TV. `test/screensaver-watchdog.test.js` runs it against a fake `luna-send`.
+1. tvpowerd keeps a record of the app in front, from the app manager's `foregroundAppsEx` updates. It switches to "Screen Saver" (`Change to Screen Saver state`) when an update shows the screensaver while that record is unchanged.
+2. When the app manager is killed, tvpowerd clears the record (`Card Type is changed : previous(org.webosbrew.minimalhome), current()`) and subscribes again once it is back. Normally the restarted app manager then announces the app in front within about a second (`previous(), current(org.webosbrew.minimalhome)`).
+3. That announcement races with the window manager's report to the restarted app manager (`[LSM->SAM] ForeGroundAppInfo` in the log). When the report arrives before the services have subscribed again, they get an empty app in their first reply, and since nothing changes afterwards, nobody is told: tvpowerd's record stays empty until the next app switch.
+4. If the next change is the screensaver itself, the update that shows it also changes tvpowerd's record from nothing to the app in front; tvpowerd handles that as an app switch, never logs `Change to Screen Saver state`, and stays busy.
+
+Reproduced by restarting the app manager the way our scripts did (`systemctl kill --kill-who=all --signal=KILL sam.service`, then `systemctl start`) and starting the screensaver with `luna://com.webos.service.tvpower/power/turnOnScreenSaver` without switching apps in between: 3 hangs in 48 restarts, one of them with the whole sequence in the log (record cleared, no announcement for 40 s, the record set by the screensaver's update, no switch to "Screen Saver"); 0 hangs in 30 screensaver starts without a restart. Without a forced restart there is no hang. Deploys no longer restart the app manager when Home's stub is unchanged; the boot script still does (see `app/appstub/replace-home.sh`).
+
+`app/boot/screensaver-watchdog.sh`, started by the boot script, was meant to close a hung screensaver after 15 s. It never fires: its `getPowerState` subscription reports changes of `state`, not of `processing`, so it never sees "Screen Saver Ready". And closing the screensaver would not free tvpowerd anyway.
