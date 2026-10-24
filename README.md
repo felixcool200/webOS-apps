@@ -178,6 +178,10 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS "exec </dev/null; luna-send -n 1 luna://com
 
 To undo it, run the same command without `org.webosbrew.minimalhome` and reboot. `luna://com.webos.memorymanager/getConfigs` shows the list `memchute` is using.
 
+### LG's background preloads
+
+LG's preload manager (`preload-manager.service`) keeps some apps from a fixed list loaded in the background so they open faster, and loads them again after the memory manager closes them; each such background start flashes the app's splash. `luna://com.webos.service.preloadmanager/getPreloadPolicy` shows the list. On 2026-10-24 AirPlay and LG Channels were taken off it, since they aren't used here (YouTube and Netflix stay): `setPreloadPolicy` with `{"application":{"id":"<app id>","isAllowed":false}}` stops it until the next boot, and `"<app id>":false` in `allowedApps` of `/var/preferences/webos-preload-manager-conf.json` keeps it that way. The file as it was is next to it as `webos-preload-manager-conf.json.before-minimal-suite`; copy it back and reboot to undo.
+
 ### Screensaver watchdog
 
 Twice (on 2026-10-23 and 2026-10-24) LG's power service, tvpowerd, started the screensaver and then waited for it forever: `luna://com.webos.service.tvpower/power/getPowerState` kept reporting `"processing": "Screen Saver Ready"` instead of switching to `"state": "Screen Saver"`, and every key, power included, was ignored until a reboot. The second time it happened three minutes after a Minimal Home deploy had restarted the app manager, which is the likely trigger.
