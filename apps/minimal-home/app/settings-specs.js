@@ -386,7 +386,7 @@ var SettingsSpecs = (function () {
         ] },
         { title: "Remote", rows: [
           { key: "remoteSlowInput", category: "option", kind: "choice", label: "Extend pressing time", labels: ON_OFF,
-            help: "Changes how long a button must be held before it counts as held, and how fast it repeats. Holding OK to arrange Home's apps changes with it." },
+            help: "Changes how long a button must be held for LG's long-press functions, such as holding Home, and how fast a held button repeats. Holding OK to arrange Home's apps isn't affected." },
           { key: "longPressInterval", category: "option", kind: "choice", label: "Long press time", labels: SECONDS,
             showWhen: { key: "remoteSlowInput", values: ["on"] }, help: "How long a button must be held to count as held." },
           { key: "repeatInterval", category: "option", kind: "choice", label: "Repeat interval", labels: SECONDS,
