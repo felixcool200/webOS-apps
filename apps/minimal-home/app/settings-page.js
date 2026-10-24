@@ -107,14 +107,15 @@ var SettingsPage = (function () {
       if (list) { return; }
       var body = view.querySelector(".page-body");
       list = element("div", "page-list");
-      if (page.context) {
-        list.appendChild(element("h3", "page-section", "Input"));
-        list.appendChild(makeRow(APPLIES_TO, "Applies to", "choice"));
-      }
+      if (page.context) { list.appendChild(makeRow(APPLIES_TO, "Applies to", "choice")); }
+      // The list starts with a box, level with the card beside it: the first section has no title
+      // (the page's own title names it) unless "Applies to" comes before it.
       page.sections.forEach(function (section, index) {
-        var heading = element("h3", "page-section", section.title);
-        heading.setAttribute("data-section", String(index));
-        list.appendChild(heading);
+        if (index > 0 || page.context) {
+          var heading = element("h3", "page-section", section.title);
+          heading.setAttribute("data-section", String(index));
+          list.appendChild(heading);
+        }
         section.rows.forEach(function (row) {
           var node = makeRow(row.key, row.label, row.kind);
           node.setAttribute("data-section", String(index));
@@ -130,12 +131,10 @@ var SettingsPage = (function () {
       lgButton.type = "button";
       lgButton.addEventListener("click", openLg);
       card.appendChild(lgButton);
-      // The card moves beside the focused row (placeCard), in a column of its own.
       side = element("div", "page-side");
       side.appendChild(card);
       body.appendChild(list);
       body.appendChild(side);
-      list.addEventListener("scroll", placeCard);
       // The first row, although hidden until the values are read; renderAll then moves the focus to
       // the first row shown.
       setFocus(list.querySelector(".setting"));
@@ -185,7 +184,8 @@ var SettingsPage = (function () {
       page.sections.forEach(function (section, index) {
         var members = list.querySelectorAll('.setting[data-section="' + index + '"]');
         var visible = Array.prototype.filter.call(members, function (node) { return !node.hidden; });
-        list.querySelector('.page-section[data-section="' + index + '"]').hidden = !visible.length;
+        var heading = list.querySelector('.page-section[data-section="' + index + '"]');
+        if (heading) { heading.hidden = !visible.length; }
         Array.prototype.forEach.call(members, function (node) {
           node.classList.toggle("is-first", node === visible[0]);
           node.classList.toggle("is-last", node === visible[visible.length - 1]);
@@ -210,19 +210,6 @@ var SettingsPage = (function () {
         text.reason = info.greyed ? info.reason + "." : "";
       }
       Object.keys(text).forEach(function (name) { card.querySelector(".card-" + name).textContent = text[name]; });
-      placeCard();
-    }
-
-    // Puts the card's top level with the focused row's (the row the card's button was reached from),
-    // as far as the card still fits in its column.
-    function placeCard() {
-      var node = selected === lgButton ? cardReturn : selected;
-      var top = 0;
-      if (node && !node.hidden) {
-        top = node.getBoundingClientRect().top - side.getBoundingClientRect().top;
-        top = Math.max(0, Math.min(side.clientHeight - card.offsetHeight, top));
-      }
-      card.style.top = Math.round(top) + "px";
     }
 
     function renderAll() {

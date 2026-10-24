@@ -30,7 +30,10 @@ BrowserTest.define("every page opens from its row in Settings and reads without 
     t.$("#" + view + "Link").click();
     t.equal(t.view(), view);
     await viewReady(t, view);
-    t.ok(t.$$("#" + view + "-view .setting").some((row) => !row.hidden), view + " shows rows");
+    const first = t.$$("#" + view + "-view .setting").filter((row) => !row.hidden)[0];
+    t.ok(first, view + " shows rows");
+    t.ok(Math.abs(t.$("#" + view + "-view .page-card").getBoundingClientRect().top - first.getBoundingClientRect().top) <= 1,
+      view + "'s card is level with its first row");
     t.key("BACK");
     t.equal(t.view(), "settings");
   }

@@ -199,26 +199,14 @@ BrowserTest.define("resetting a picture mode asks for OK again, and clears the m
   await t.until(() => /Picture mode reset/.test(t.text("#picture-status")), 3000, "done");
 });
 
-BrowserTest.define("the card stays level with the focused row, also when the list has scrolled", {}, async (t) => {
+BrowserTest.define("the card is level with the list's first box, and stays there while the list scrolls", {}, async (t) => {
   await t.homeReady();
   openPicture();
   await pageReady(t);
-  // Where the card goes (its style; the move is animated, which Chrome's virtual time doesn't run).
-  const level = async (key) => {
-    await t.wait(50);
-    const card = t.$("#picture-view .page-card");
-    const focused = row(t, key).getBoundingClientRect();
-    const side = t.$("#picture-view .page-side").getBoundingClientRect();
-    const top = side.top + parseFloat(card.style.top);
-    const fits = focused.top + card.offsetHeight <= side.bottom + 1;
-    t.ok(fits ? Math.abs(top - focused.top) <= 1 : Math.abs(top + card.offsetHeight - side.bottom) <= 1,
-      key + ": the card's top is level with the row's, or its bottom with the column's");
-  };
-  await level("appliesTo");
-  focusRow(t, "contrast");
-  await level("contrast");
-  focusRow(t, "sharpness");
-  await level("sharpness");
+  const card = () => t.$("#picture-view .page-card").getBoundingClientRect().top;
+  t.ok(Math.abs(card() - row(t, "appliesTo").getBoundingClientRect().top) <= 1, "level with Applies to");
+  const before = card();
   focusRow(t, "pictureReset");
-  await level("pictureReset");
+  t.ok(t.$("#picture-view .page-list").scrollTop > 0, "the list scrolled");
+  t.equal(card(), before, "the card didn't move");
 });
