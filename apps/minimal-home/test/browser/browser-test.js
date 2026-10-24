@@ -108,6 +108,10 @@ var BrowserTest = (function () {
       finish({ ok: false, message: "No test named " + name });
       return;
     }
+    if (window.innerWidth !== 1920 || window.innerHeight !== 1080) {
+      finish({ ok: false, message: "The page is " + window.innerWidth + "x" + window.innerHeight + ", not 1920x1080 as on the TV; fix --window-size in run.js" });
+      return;
+    }
     Promise.resolve().then(function () { return test.body(helpers); }).then(function () {
       finish({ ok: true });
     }, function (error) {

@@ -62,7 +62,8 @@
     hidden: { back: "home", from: "hidden-tile" },
     sources: { back: "home", from: "sources-button", module: Sources },
     settings: { back: "home", from: "settings", module: MinimalSettings },
-    remote: { back: "settings", from: "settings", module: RemoteButtons }
+    remote: { back: "settings", from: "settings", module: RemoteButtons },
+    appearance: { back: "settings", from: "settings", module: Appearance }
   };
   var view = "home";
   var installed = [];

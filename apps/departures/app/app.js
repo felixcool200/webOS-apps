@@ -357,9 +357,14 @@
     document.addEventListener("webOSRelaunch", startPolling);
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) { stopPolling(); }
-      else { startPolling(); }
+      else {
+        startPolling();
+        Theme.sync();
+      }
     });
     startPolling();
+    // The theme this app used last is already applied; this takes one chosen in Home since then.
+    Theme.sync();
   }
 
   document.addEventListener("DOMContentLoaded", init);

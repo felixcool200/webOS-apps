@@ -177,7 +177,7 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
    while the other apps step back, so moving can't be mistaken for selecting. */
 #home-view.is-moving .app:not(.is-editing) { opacity: 0.4; }
 .grid-view .app.is-editing {
-  background: rgba(114, 214, 255, 0.26);
+  background: rgba(var(--accent-rgb), 0.26);
   box-shadow: 0 0 0 0.5vh var(--accent), 0 2.2vh 5vh rgba(0, 0, 0, 0.6);
   transform: scale(1.12) translateY(-1vh);
   z-index: 3;
@@ -276,7 +276,7 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .panel-view .is-editing .value {
   color: var(--accent);
   font-weight: 700;
-  text-shadow: 0 0 0.7vh rgba(114, 214, 255, 0.85);
+  text-shadow: 0 0 0.7vh rgba(var(--accent-rgb), 0.85);
 }
 
 .panel-view .focusable.is-focused {

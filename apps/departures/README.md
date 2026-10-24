@@ -14,6 +14,8 @@ The bus and tram columns are split in half: "From Lidingö" (towards Ropsten) on
 - **Torsvik** splits by direction: SL's `direction` field starting with "Ropsten" goes on top. Both tram platforms can serve both directions, so the platform is not a reliable signal.
 - **Ropsten** is not split. All metro departures from Ropsten leave in the same direction.
 
+The colours follow the theme chosen in Minimal Home's Appearance view: the app starts with the theme it used last and takes a newer one from Home's theme file once it is on screen.
+
 Each row shows the line, the destination and the minutes until departure. Cancelled departures stay in the list, marked as cancelled. SL service notices for the column's mode appear at the bottom of the column.
 
 The app counts down from the TV clock between refreshes. Departures within ten minutes show minutes and seconds (`4:32`), the last minute shows seconds (`45 s`).

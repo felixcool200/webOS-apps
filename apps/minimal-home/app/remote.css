@@ -252,7 +252,7 @@
 }
 
 #remote-view .remote-button.is-pointed {
-  background: rgba(114, 214, 255, 0.28);
+  background: rgba(var(--accent-rgb), 0.28);
   color: var(--text);
   box-shadow: 0 0 0 0.4vh var(--accent);
   z-index: 2;

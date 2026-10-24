@@ -58,7 +58,8 @@ function unescapeHtml(text) {
 function runTest(chrome, page, test, index) {
   return new Promise((resolve) => {
     const profile = path.join(page, ".profile-" + index);
-    const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--user-data-dir=" + profile, "--window-size=1920,1080",
+    // Headless Chrome keeps 143 px of the window for its frame, so this gives the TV's 1920x1080 page.
+    const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--user-data-dir=" + profile, "--window-size=1920,1223",
       "--hide-scrollbars", "--virtual-time-budget=" + test.budget, "--dump-dom",
       "file://" + path.join(page, "index.html") + "#" + encodeURIComponent(test.name)];
     const child = spawn(chrome, args, { stdio: ["ignore", "pipe", "ignore"] });

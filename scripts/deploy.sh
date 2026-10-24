@@ -46,8 +46,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# What the app manager reads of Minimal Home's stub (mounted over LG's Home), as a checksum.
+home_stub=/media/developer/apps/usr/palm/applications/org.webosbrew.minimalhome/appstub
+stub_sum() { tv "cat $1/appinfo.json $1/index.html 2>/dev/null | md5sum"; }
+stub_before=
 if [ "$id" = org.webosbrew.minimalhome ] && tv 'test -e /var/lib/webosbrew/init.d/50-minimal-home'; then
   home_redirect=1
+  stub_before=$(stub_sum /usr/palm/applications/com.webos.app.home)
   echo "Unmounting the Home redirect before upgrading"
   tv 'umount /usr/palm/applications/com.webos.app.home 2>/dev/null || true'
 fi
@@ -80,9 +85,16 @@ if [ "$installed" != 1 ]; then
 fi
 echo "Installed $id $version"
 
+# Restarting the app manager can leave LG's screensaver hanging, so it only happens when the stub it
+# reads has changed.
 if [ "$home_redirect" = 1 ]; then
-  echo "Reactivating Minimal Home (the screen may go black briefly)"
-  tv '/home/root/use-minimal-home.sh' >/dev/null
+  if [ "$(stub_sum "$home_stub")" = "$stub_before" ]; then
+    echo "Reactivating Minimal Home"
+    tv "cp $home_stub/replace-home.sh /var/lib/webosbrew/init.d/50-minimal-home && chmod 755 /var/lib/webosbrew/init.d/50-minimal-home && sh $home_stub/replace-home.sh --keep-app-manager"
+  else
+    echo "Reactivating Minimal Home with its new stub (the screen may go black briefly)"
+    tv '/home/root/use-minimal-home.sh' >/dev/null
+  fi
   home_redirect=0
 fi
 

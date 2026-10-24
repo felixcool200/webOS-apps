@@ -1,0 +1,63 @@
+/* The Appearance view. The header, rows, focus, footer and status are shared with Settings
+   (.panel-view in style.css); every rule here is scoped to #appearance-view. */
+.appearance-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 4vw;
+}
+
+#appearance-view .panel {
+  flex: none;
+  width: 40vw;
+  overflow: hidden;
+  border-radius: 1.5vh;
+}
+
+#appearance-view .setting {
+  min-height: 9.2vh;
+  padding: 1.35vh 1.4vw;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#appearance-view .setting:first-child { border-radius: 1.5vh 1.5vh 0 0; }
+#appearance-view .setting:last-of-type { border-radius: 0 0 1.5vh 1.5vh; border-bottom: 0; }
+#appearance-view .setting.is-editing .value::before { content: "‹  "; }
+#appearance-view .setting.is-editing .value::after { content: "  ›"; }
+#appearance-delete .value { color: var(--error); }
+
+.appearance-side { flex: 1; min-width: 0; }
+
+/* Every theme on offer, the one in use outlined. */
+#appearance-themes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.4vh 1vw;
+}
+
+.theme-card {
+  position: relative;
+  height: 10.5vh;
+  padding: 1.3vh 0.9vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 1.3vh;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.theme-card.is-current { box-shadow: 0 0 0 0.35vh var(--card-accent), 0 1vh 2.4vh rgba(0, 0, 0, 0.4); }
+
+/* A focused tile in the theme's colours. */
+.theme-sample {
+  width: 3.2vh;
+  height: 3.2vh;
+  border-radius: 0.8vh;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 0.25vh var(--card-accent);
+}
+
+.theme-name { overflow: hidden; color: var(--text); font-size: 1.4vh; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.appearance-note { max-width: 40vw; margin: 2.4vh 0 0; color: var(--muted); font-size: 1.45vh; line-height: 1.5; }

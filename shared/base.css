@@ -1,8 +1,12 @@
 /* Shared by every app: palette, page reset, background and font. The build puts this in front of
    each app's own style.css, so an app can override any of it. */
 :root {
+  /* The default theme. shared/theme.js sets these from the theme in use (Theme.variables). */
   --accent: #72d6ff;
+  --accent-rgb: 114, 214, 255;
   --bg: #081017;
+  --glow-a: rgba(30, 104, 145, 0.38);
+  --glow-b: rgba(67, 55, 130, 0.28);
   --text: #f7f9fc;
   --muted: rgba(247, 249, 252, 0.62);
   --error: #ff9393;
@@ -21,8 +25,8 @@ html, body {
 body {
   color: var(--text);
   background:
-    radial-gradient(70vw 65vh at 4% 0%, rgba(30, 104, 145, 0.38), transparent 68%),
-    radial-gradient(55vw 65vh at 100% 100%, rgba(67, 55, 130, 0.28), transparent 72%),
+    radial-gradient(70vw 65vh at 4% 0%, var(--glow-a), transparent 68%),
+    radial-gradient(55vw 65vh at 100% 100%, var(--glow-b), transparent 72%),
     var(--bg);
   font-family: "LG Smart UI", "Segoe UI", Arial, sans-serif;
   -webkit-user-select: none;

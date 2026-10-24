@@ -48,6 +48,12 @@ While apps are hidden, a "Hidden apps" tile with their count ends the Tools row.
 
 The order, the Tools row, and the hidden list are kept in `localStorage` on the TV (WebAppMgr's storage under `/var/lib/wam`), so they survive reinstalling Home. Apps installed later appear after the saved order, and tools or hidden apps that are uninstalled keep their place in case they come back. The moves are in `app/home-logic.js`, tested by `test/home-logic.test.js`.
 
+## Appearance
+
+Settings has an Appearance row (under Apps) that opens the colour theme of Home and the other apps in this repo. A theme is an accent colour (focus rings, highlights, bars) on a background (the page colour and the glow in two corners). Theme steps through seven presets and your own themes, shown as cards beside the rows; Accent and Background step through a palette of 12 accents and 7 backgrounds. Changing the accent or background of a preset makes a theme of your own from it ("Custom 1", "Custom 2", ...), which later changes then edit, and which Delete this theme removes after a second OK.
+
+A change shows at once. `shared/theme.js`, loaded in each app's `<head>`, sets the theme as CSS variables (`--accent`, `--accent-rgb`, `--bg`, `--glow-a`, `--glow-b`) from the app's own `localStorage` before the first frame (about 2 ms in desktop Chrome). Half a second after the last change Home writes the theme to `/home/root/.config/minimal-suite/theme.json`; the other apps read that file after they start and when they come back on screen (`Theme.sync()`), and switch if it changed. Your own themes are kept in Home's `localStorage` as `theme.custom`. The rules are in `app/appearance-logic.js` and `shared/theme.js`, tested by `test/appearance-logic.test.js`, `shared/test/theme.test.js` and `test/browser/appearance.browser.js`.
+
 ## Settings view
 
 The Settings action opens a Settings view inside Minimal Home, so no separate app has to start: it appears in about 0.2 s instead of about 1 s. Its code is `app/settings.js`, `app/settings-logic.js` (tested by `test/home-logic.test.js`) and `app/settings.css`. Home reads the current values in the background about a second after it comes on screen, so they are already filled in when the view opens, and refreshes them on every open.

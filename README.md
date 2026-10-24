@@ -4,7 +4,7 @@ Small, fast applications for a rooted LG webOS TV.
 
 ## Apps
 
-- **Minimal Home** — a fullscreen launcher with a curated app grid, a Sources view for switching inputs, a built-in Settings view for frequently used picture, sound, network, and system settings, remote button bindings, remote navigation, and a reversible stock-Home redirect.
+- **Minimal Home** — a fullscreen launcher with a curated app grid, a Sources view for switching inputs, a built-in Settings view for frequently used picture, sound, network, and system settings, remote button bindings, colour themes shared by the apps, remote navigation, and a reversible stock-Home redirect.
 - **Departures** — a fullscreen board of live SL departures from Torsvikstorg, Torsvik and Ropsten.
 
 All apps are plain webOS web applications. Privileged operations use the root execution service supplied by [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
@@ -34,7 +34,7 @@ npm install
 npm run package
 ```
 
-Packaging first builds the app into its `build/` directory: a copy of its `app/` folder with the shared files (`base.css`, `webos.js`, `ui.js`, `splash.png`) next to its own. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
+Packaging first builds the app into its `build/` directory: a copy of its `app/` folder with the shared files (`base.css`, `webos.js`, `ui.js`, `theme.js`, `splash.png`) next to its own. The resulting IPK is written to that app's `dist/` directory as `<app id>_<version>_all.ipk`.
 
 ## Tests
 
@@ -130,8 +130,11 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
 
 # Upload and install the new Minimal Home IPK here.
 
-ssh -i ~/.ssh/tv_key root@TV_ADDRESS '/home/root/use-minimal-home.sh'
+ssh -i ~/.ssh/tv_key root@TV_ADDRESS \
+  'sh /media/developer/apps/usr/palm/applications/org.webosbrew.minimalhome/appstub/replace-home.sh --keep-app-manager'
 ```
+
+`--keep-app-manager` puts the redirect back without restarting the app manager, which already read the stub. That is only right if the stub's `appinfo.json` and `index.html` are unchanged; otherwise run `/home/root/use-minimal-home.sh`, which restarts it. `deploy.sh` compares the two before and after installing and picks the right one. Restarting the app manager is best avoided: twice, the next screensaver hung afterwards (see "Screensaver watchdog").
 
 ## Remote button hook
 
@@ -161,3 +164,9 @@ ssh -i ~/.ssh/tv_key root@TV_ADDRESS '/home/root/restore-stock-home.sh'
 ```
 
 The recovery script removes the boot hook, unmounts the redirect, restores `com.webos.app.home` as the default Home app, and restarts the webOS application manager.
+
+### Screensaver watchdog
+
+Twice (on 2026-10-23 and 2026-10-24) LG's power service, tvpowerd, started the screensaver and then waited for it forever: `luna://com.webos.service.tvpower/power/getPowerState` kept reporting `"processing": "Screen Saver Ready"` instead of switching to `"state": "Screen Saver"`, and every key, power included, was ignored until a reboot. The second time it happened three minutes after a Minimal Home deploy had restarted the app manager, which is the likely trigger.
+
+Minimal Home's boot script starts `app/boot/screensaver-watchdog.sh`, which follows the power state (a `getPowerState` subscription, so it costs nothing while nothing changes). If tvpowerd waits like this for 15 s, it closes the screensaver app and logs the power state before and after to `/tmp/screensaver-watchdog.log` on the TV. `test/screensaver-watchdog.test.js` runs it against a fake `luna-send`.

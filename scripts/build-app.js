@@ -9,7 +9,7 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const appDir = path.resolve(process.argv[2] || ".");
 const build = path.join(appDir, "build");
-const SHARED = ["base.css", "webos.js", "ui.js", "splash.png"];
+const SHARED = ["base.css", "webos.js", "ui.js", "theme.js", "splash.png"];
 
 for (const file of SHARED) {
   if (fs.existsSync(path.join(appDir, "app", file))) {

@@ -18,7 +18,7 @@
 }
 
 #settings-view .setting {
-  min-height: 9.2vh;
+  min-height: 8.8vh;
   padding: 1.35vh 1.4vw;
   grid-template-columns: minmax(0, 1fr) minmax(8vw, 13vw) 5.5vw;
 }

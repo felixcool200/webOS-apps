@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="remote.css">
+  <link rel="stylesheet" href="appearance.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <main id="home-view" class="grid-view">
@@ -101,6 +103,43 @@
     </footer>
   </main>
 
+  <main id="appearance-view" class="panel-view" hidden>
+    <header>
+      <div class="time"><span class="clock"></span><span class="date"></span></div>
+      <p class="view-name">Appearance</p>
+    </header>
+    <div class="appearance-body">
+      <div id="appearance-list" class="panel">
+        <button class="setting focusable" id="appearance-theme" data-row="theme" type="button">
+          <span class="copy"><strong>Theme</strong><small>A preset or one of your own</small></span>
+          <span class="value"></span>
+        </button>
+        <button class="setting focusable" id="appearance-accent" data-row="accent" type="button">
+          <span class="copy"><strong>Accent</strong><small>Focus rings, highlights and bars</small></span>
+          <span class="value"></span>
+        </button>
+        <button class="setting focusable" id="appearance-background" data-row="background" type="button">
+          <span class="copy"><strong>Background</strong><small>Page colour and its glow</small></span>
+          <span class="value"></span>
+        </button>
+        <button class="setting focusable" id="appearance-delete" type="button" hidden>
+          <span class="copy"><strong>Delete this theme</strong><small>Only your own themes can be deleted</small></span>
+          <span class="value"></span>
+        </button>
+      </div>
+      <div class="appearance-side">
+        <div id="appearance-themes"></div>
+        <p class="appearance-note">Changing the accent or background of a preset makes a theme of your own. Every app uses the theme chosen here.</p>
+      </div>
+    </div>
+    <footer>
+      <span id="appearance-move-hint"><b>Arrows</b> Move</span>
+      <span id="appearance-select-hint"><b>OK</b> Select</span>
+      <span id="appearance-back-hint"><b>Back</b> Settings</span>
+      <span id="appearance-status" class="status"></span>
+    </footer>
+  </main>
+
   <main id="settings-view" class="panel-view" hidden>
     <header>
       <div class="time"><span class="clock"></span><span class="date"></span></div>
@@ -134,6 +173,14 @@
           <button class="setting choice-setting focusable" data-setting="energySaving" data-nav-right="advanced" type="button">
             <span class="copy"><strong>Energy saving</strong><small>Automatic panel dimming</small></span>
             <span class="value">Loading…</span>
+          </button>
+        </div>
+
+        <h2 class="section-gap">Apps</h2>
+        <div class="panel">
+          <button class="setting choice-setting focusable" id="appearanceLink" data-view="appearance" data-nav-right="advanced" type="button">
+            <span class="copy"><strong>Appearance</strong><small>Colour theme of Home and the other apps</small></span>
+            <span class="value">—</span>
           </button>
         </div>
       </section>
@@ -170,7 +217,7 @@
         <div class="info-card">
           <strong>More settings</strong>
           <p>Bluetooth, inputs, accessibility, updates and detailed network setup remain in LG Settings.</p>
-          <button id="advanced" class="action focusable" data-nav-left="energySaving" type="button">Open LG Settings</button>
+          <button id="advanced" class="action focusable" data-nav-left="appearanceLink" type="button">Open LG Settings</button>
         </div>
       </section>
     </div>
@@ -188,9 +235,11 @@
   <script src="settings-logic.js"></script>
   <script src="remote-logic.js"></script>
   <script src="sources-logic.js"></script>
+  <script src="appearance-logic.js"></script>
   <script src="settings.js"></script>
   <script src="remote.js"></script>
   <script src="sources.js"></script>
+  <script src="appearance.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
