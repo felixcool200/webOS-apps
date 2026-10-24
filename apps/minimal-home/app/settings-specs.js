@@ -89,7 +89,8 @@ var SettingsSpecs = (function () {
   // one of those values; showWhen and hideWhen: rules that show or hide it; `with`: settings LG writes
   // together with it; confirm: { values, prompt } to ask before writing those values, or { any: true,
   // prompt } before the first change; reread: true when a change alters what the other rows show; and
-  // appId for a key LG reads and writes for an app, shown only for the input that played last. An
+  // appId for a key LG reads and writes for an app, shown only for the input that played last (as is
+  // a row with playing: true). An
   // action row (kind action) runs `action` ({ write: settings } or { reset: "picture" | "sound" }) on a
   // second OK, then says `done`.
   var PAGES = {
@@ -169,8 +170,8 @@ var SettingsSpecs = (function () {
         ] },
         { title: "Copy and reset", rows: [
           { key: "applyToAllInput", category: "picture", kind: "action", label: "Apply to all inputs", action: { write: { applyToAllInput: "picture" } },
-            confirm: { prompt: "OK again copies this picture mode's settings to the same mode of every input" }, done: "Applied to all inputs",
-            help: "Copies the settings of this input's picture mode to the same picture mode of every other input." },
+            playing: true, confirm: { prompt: "OK again copies this picture mode's settings to the same mode of every input" }, done: "Applied to all inputs",
+            help: "Copies the settings of the picture mode playing now to the same picture mode of every other input. The TV copies from what plays, so it shows only for the input that played last." },
           { key: "pictureReset", kind: "action", label: "Reset picture mode", action: { reset: "picture" },
             confirm: { prompt: "OK again resets this picture mode's settings to LG's defaults" }, done: "Picture mode reset",
             help: "Returns the settings of this input's picture mode to LG's defaults." }
@@ -352,12 +353,12 @@ var SettingsSpecs = (function () {
           { key: "focusEmphasis", category: "option", kind: "choice", label: "Focus with high contrast", labels: ON_OFF,
             "with": FILTERS_OFF, greyedWhen: COLOUR_FILTERS,
             help: "Highlights the focused item in LG's menus more strongly." },
+          // Screen zoom stays in LG Settings: on this TV it zooms the screen at once, and the arrows then
+          // pan the zoom instead of reaching Home, so Home couldn't turn it off again.
           { key: "grayscale", source: "colourFilters", kind: "choice", label: "Grayscale", labels: ON_OFF,
             help: "Turns the whole screen black and white. Turns Invert colours, Screen zoom and the high-contrast options off." },
           { key: "invertColours", source: "colourFilters", kind: "choice", label: "Invert colours", labels: ON_OFF,
-            help: "Inverts the colours of the screen. Turns Grayscale, Screen zoom and the high-contrast options off." },
-          { key: "screenMagnification", category: "option", kind: "choice", label: "Screen zoom", labels: ON_OFF, "with": FILTERS_OFF,
-            help: "Lets you zoom into the screen: hold the Home button to start, and again to stop or change it." }
+            help: "Inverts the colours of the screen. Turns Grayscale, Screen zoom and the high-contrast options off." }
         ] },
         { title: "Audio", rows: [
           { key: "audioGuidance", category: "option", kind: "choice", label: "Audio guidance", labels: ON_OFF,

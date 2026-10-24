@@ -189,6 +189,7 @@ BrowserTest.define("resetting a picture mode asks for OK again, and clears the m
   t.key("UP");
   t.key("DOWN");
   t.equal(rowValue(t, "pictureReset"), "", "moving away cancels it");
+  t.equal(t.text('#picture-view [data-key="pictureReset"] small'), "", "an action doesn't say Every input");
   t.key("OK");
   t.key("OK");
   await t.until(() => t.tv().resets.length === 1, 3000, "the reset");
@@ -196,4 +197,28 @@ BrowserTest.define("resetting a picture mode asks for OK again, and clears the m
   await t.until(() => t.tv().writes.length === 1, 3000, "the flag");
   t.equal(t.tv().writes[0].settings.pictureSettingModified.normal, false);
   await t.until(() => /Picture mode reset/.test(t.text("#picture-status")), 3000, "done");
+});
+
+BrowserTest.define("the card stays level with the focused row, also when the list has scrolled", {}, async (t) => {
+  await t.homeReady();
+  openPicture();
+  await pageReady(t);
+  // Where the card goes (its style; the move is animated, which Chrome's virtual time doesn't run).
+  const level = async (key) => {
+    await t.wait(50);
+    const card = t.$("#picture-view .page-card");
+    const focused = row(t, key).getBoundingClientRect();
+    const side = t.$("#picture-view .page-side").getBoundingClientRect();
+    const top = side.top + parseFloat(card.style.top);
+    const fits = focused.top + card.offsetHeight <= side.bottom + 1;
+    t.ok(fits ? Math.abs(top - focused.top) <= 1 : Math.abs(top + card.offsetHeight - side.bottom) <= 1,
+      key + ": the card's top is level with the row's, or its bottom with the column's");
+  };
+  await level("appliesTo");
+  focusRow(t, "contrast");
+  await level("contrast");
+  focusRow(t, "sharpness");
+  await level("sharpness");
+  focusRow(t, "pictureReset");
+  await level("pictureReset");
 });

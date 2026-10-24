@@ -103,6 +103,8 @@
 .settings-page .page-list::-webkit-scrollbar { display: none; }
 .settings-page .page-section { margin: 2.4vh 0 1.2vh; color: var(--muted); font-size: 1.5vh; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .settings-page .page-list > .page-section:first-child { margin-top: 0; }
+/* The card's column: the card moves to stay beside the focused row (settings-page.js, placeCard). */
+.settings-page .page-side { position: relative; min-height: 0; }
 
 .settings-page .setting {
   min-height: 7.4vh;
@@ -128,7 +130,11 @@
 .settings-page .focusable.is-busy { opacity: 0.65; }
 
 .settings-page .page-card {
-  align-self: start;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  transition: top 0.12s ease-out;
   padding: 2.2vh 1.6vw;
   display: flex;
   flex-direction: column;

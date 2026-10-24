@@ -332,14 +332,16 @@ var SettingsLogic = (function () {
         return key === "wifiEnabled" ? ["luna://com.webos.service.connectionmanager/setstate", { wifi: value }] : null;
       }
     },
-    // Where the sound plays: the TV speaker, the outputs the audio service lists, and the one in use.
+    // Where the sound plays: the TV speaker and the optical output with or without it, which LG offers
+    // always (an optical device can't be detected), and the outputs the audio service names: the one in
+    // use, the one before it, and its list (which on this TV holds only the one in use).
     soundOut: {
       reads: [["luna://com.webos.service.audio/getSoundOutput", {}]],
       parse: function (replies) {
         var reply = replies[0];
-        var choices = ["tv_speaker"];
-        (reply.settingsSoundOutputs || []).concat([reply.soundOutput]).forEach(function (output) {
-          if (output && choices.indexOf(output) < 0) { choices.push(output); }
+        var choices = ["tv_speaker", "tv_external_speaker", "external_optical"];
+        (reply.settingsSoundOutputs || []).concat([reply.soundOutput, reply.lastSoundOutput]).forEach(function (output) {
+          if (output && output !== "none" && choices.indexOf(output) < 0) { choices.push(output); }
         });
         return { values: { soundOutput: reply.soundOutput }, choices: { soundOutput: choices } };
       },
@@ -491,7 +493,7 @@ var SettingsLogic = (function () {
     var value = state.values[row.key];
     var action = row.kind === "action";
     var hidden = (action ? row.category && (!desc || !desc.visible) : !desc || !desc.visible || value === undefined) ||
-      (row.appId && state.now && state.context.input !== state.now.input) ||
+      ((row.appId || row.playing) && state.now && state.context.input !== state.now.input) ||
       (row.showWhen && !holds(row.showWhen, state)) || (row.hideWhen && holds(row.hideWhen, state));
     var view = { hidden: !!hidden, greyed: false, reason: "", value: value, note: (state.notes && state.notes[row.key]) || "" };
     if (view.hidden) { return view; }
@@ -517,10 +519,20 @@ var SettingsLogic = (function () {
       view.fill = view.max > view.min ? Math.max(0, Math.min(100, (value - view.min) / (view.max - view.min) * 100)) : 0;
       view.text = String(value);
     } else {
-      view.values = allowedValues({ values: { arrayExt: desc.choices || [] } }, value, row.order);
+      view.values = allowedValues({ values: { arrayExt: desc.choices || [] } }, value, row.order || switchOrder(desc.choices));
       view.text = labelFor(row, value);
     }
     return view;
+  }
+
+  // On/off choices go off first, so Left turns a switch off and Right on, whatever order the TV lists
+  // them in (on, off for most keys; true, false for some).
+  var SWITCH_VALUES = ["off", "false", "disabled", "on", "true", "enabled"];
+
+  function switchOrder(choices) {
+    var values = (choices || []).map(function (entry) { return entry.value; });
+    var isSwitch = values.length === 2 && values.every(function (value) { return SWITCH_VALUES.indexOf(value) >= 0; });
+    return isSwitch ? SWITCH_VALUES : null;
   }
 
   // The value one step from a row's current one, as rowView offers it.
@@ -577,22 +589,14 @@ var SettingsLogic = (function () {
   }
 
   // The settingsservice operations of an action row, as LG Settings runs them: `write` sets settings
-  // (in the page's context on a page with "Applies to", as Apply to All Inputs copies that input's
-  // mode); reset "picture" restores the context's picture mode on its input and clears the mode's
-  // "(User Settings)" flag; reset "sound" restores the current sound mode's settings. Null when the
-  // context can't target it yet.
-  function actionOperations(row, state, page) {
+  // without a dimension (Apply to All Inputs copies what plays: named with HDMI 3's dimension while
+  // live TV played, it copied nothing, so that row shows only for the input that played last); reset
+  // "picture" restores the context's picture mode on its input and clears the mode's "(User
+  // Settings)" flag; reset "sound" restores the current sound mode's settings. Null when the context
+  // can't target it yet.
+  function actionOperations(row, state) {
     var action = row.action;
-    if (action.write) {
-      var write = { category: row.category, settings: action.write };
-      var desc = state.descs[row.key];
-      if (page && page.context && desc && desc.dims.length) {
-        var dimension = dimensionFor(desc.dims, state.context);
-        if (!dimension) { return null; }
-        write.dimension = dimension;
-      }
-      return [{ method: "setSystemSettings", params: write }];
-    }
+    if (action.write) { return [{ method: "setSystemSettings", params: { category: row.category, settings: action.write } }]; }
     if (action.reset === "picture") {
       if (state.context.input === undefined || state.context.pictureMode === undefined) { return null; }
       var operations = [{ method: "resetSystemSettings", params: { category: "picture", dimension: { input: state.context.input, pictureMode: state.context.pictureMode } } }];

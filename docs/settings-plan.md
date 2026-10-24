@@ -1,6 +1,6 @@
 # Plan: Minimal Home's Settings covering LG's Settings
 
-Status: all phases are built, in Minimal Home 0.3.52: the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages, with Phase 7's rows. The TV runs 0.3.51 (everything but Phase 7's rows); installing 0.3.52 and checking its rows on the TV waits for the user. Apply to all inputs (it overwrites other inputs' settings) and Extend pressing time (it needs the remote held) need the user's OK and hands. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
+Status: all phases are built and installed (Minimal Home 0.3.56): the hub and the Picture, Sound, Network, Power and energy, General, Accessibility and About this TV pages, with Phase 7's rows, each checked on the TV through Home with remote keys (`networkinput/sendSpecialKey`) and set back. Not tried yet: holding OK to arrange Home's apps with Extend pressing time on, which needs the remote in hand. Code references below are to commit `c4a7849` on `remote-buttons`, whose app code is the same as `d745ffd` (only `README.md` changed in between). Everything marked D, V, C or S below was read on the TV on 2026-10-24 with read-only calls.
 
 ## Decisions and checks (2026-10-24)
 
@@ -26,7 +26,16 @@ Phase 7 (checked on the TV on 2026-10-24, each change set back):
 - **Resets:** `resetSystemSettings` runs inside `settingsservice/batch`. A picture reset of HDMI 3's Eco (`{input, pictureMode}`; `_3dStatus` doesn't exist on this TV, and LG passes it only when it does) left every value as it was, and a sound reset of `audioBalance` and `soundModeModified` kept 0. LG offers the sound reset only in Standard (this TV lacks `supportSoundWizard`), with the keys of `soundResetKeys`.
 - **Apply to all inputs** (`applyToAllInput: "picture"`, `applyToAllInputSSM: "sound"`) was not tried: it would copy one input's mode over the others'. Home writes it as LG does, the picture one with the chosen input's dimension.
 - **Always Ready:** on is `lifeOnScreenMode` `allEnabled` or `alwaysReady` (now `none`); LG turns it on as `allEnabled` and in Europe records `erpUserConfirm: true` (already true here). **Power on screen:** `homeAutoLaunch` and `selectedInputApp` with `checkHomeAutoLaunchValue: "user"` (it exists: `"default"`); single inputs are China-only. **Sound out:** the TV speaker and `audio/getSoundOutput`'s `settingsSoundOutputs`, written to `soundOutput`. **Grayscale and Invert colours:** LG writes `screenMagnification: "off"`, then `adjustments` with `highContrast` and `focusEmphasis` off.
-- **SIMPLINK, Turn on via Wi-Fi (Mobile TV On), Minimum brightness, Screen zoom, Audio guidance and Extend pressing time** are plain keys; Turn on via Wi-Fi and Minimum brightness ask first, as LG does. Extend pressing time changes how long OK must be held to arrange Home's apps; that wasn't tried on the TV.
+- **SIMPLINK, Turn on via Wi-Fi (Mobile TV On), Minimum brightness, Audio guidance and Extend pressing time** are plain keys; Turn on via Wi-Fi and Minimum brightness ask first, as LG does. Extend pressing time changes how long OK must be held to arrange Home's apps; that wasn't tried with the remote.
+
+Checked through Home on the TV after installing (each set back, and every input's Vivid and Eco compared with a snapshot afterwards):
+
+- **Apply to all inputs copies what plays.** Named with HDMI 3's dimension while live TV played, it copied nothing; written as LG writes it (no dimension) from live TV's Vivid, it copied live TV's sharpness to every input's Vivid. So the row shows only for the input that played last.
+- **Reset picture mode** of HDMI 3's Vivid (not playing) restored its sharpness and cleared its flag, and nothing else changed.
+- **Screen zoom was taken out:** turned on, it zooms the whole screen at once and the arrows then pan the zoom, so Home could not turn it off again (it was turned off over Luna). It stays in LG Settings.
+- **Sound out:** after a switch, `getSoundOutput` lists only the output in use (and `lastSoundOutput` the one before), so Home offers the TV speaker, optical with and without the TV speaker (which LG offers always) and those outputs, and can switch back.
+- **Switches:** the TV lists on/off values as `on, off` or `true, false`; Home orders them off first, so Left turns a switch off and Right on.
+- Power on screen, Always Ready (asks first; turned off it is written `off`, so it was put back to `none` over Luna), Turn on via Wi-Fi, Minimum brightness (asks once), SIMPLINK, Grayscale, Audio guidance, Extend pressing time, TruMotion, Sound out, and Sound's apply and reset all read back as written.
 
 ## Summary
 

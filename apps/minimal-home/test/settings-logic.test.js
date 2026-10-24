@@ -410,18 +410,21 @@ test("keys LG keeps per app are read and written with an app id, and show only f
   assert.deepStrictEqual(PER_APP_ROWS.slice(0, 2).map((row) => SettingsLogic.rowView(row, apps).hidden), [false, true], "no aspect ratio for apps");
 });
 
-test("Apply to all inputs copies the chosen input's mode; a picture reset also clears the mode's (User Settings)", () => {
+test("Apply to all inputs copies what plays, as LG writes it; a picture reset also clears the mode's (User Settings)", () => {
   const state = perAppState({ input: "hdmi3", pictureMode: "eco", dynamicRange: "sdr" }, { input: "hdmi2" });
-  assert.deepStrictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[3], state, PER_APP), [
-    { method: "setSystemSettings", params: { category: "picture", settings: { applyToAllInput: "picture" }, dimension: { input: "hdmi3", pictureMode: "eco" } } }
+  const apply = Object.assign({}, PER_APP_ROWS[3], { playing: true });
+  assert.deepStrictEqual(SettingsLogic.actionOperations(apply, state), [
+    { method: "setSystemSettings", params: { category: "picture", settings: { applyToAllInput: "picture" } } }
   ]);
-  assert.deepStrictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], state, PER_APP), [
+  assert.strictEqual(SettingsLogic.rowView(apply, state).hidden, true, "HDMI 3 isn't playing");
+  assert.strictEqual(SettingsLogic.rowView(apply, perAppState({ input: "hdmi2", pictureMode: "eco" }, { input: "hdmi2" })).hidden, false);
+  assert.deepStrictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], state), [
     { method: "resetSystemSettings", params: { category: "picture", dimension: { input: "hdmi3", pictureMode: "eco" } } },
     { method: "setSystemSettings", params: { category: "picture", settings: { pictureSettingModified: { eco: false, normal: false } }, dimension: { input: "hdmi3" } } }
   ]);
   const unchanged = Object.assign({}, state, { context: { input: "hdmi3", pictureMode: "normal" } });
-  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], unchanged, PER_APP).length, 1, "the flag is already off");
-  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], perAppState({ input: "hdmi3" }, {}), PER_APP), null, "the mode isn't known yet");
+  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], unchanged).length, 1, "the flag is already off");
+  assert.strictEqual(SettingsLogic.actionOperations(PER_APP_ROWS[4], perAppState({ input: "hdmi3" }, {})), null, "the mode isn't known yet");
   const view = SettingsLogic.rowView(PER_APP_ROWS[4], state);
   assert.deepStrictEqual([view.hidden, view.text], [false, ""], "an action without a key of its own shows");
 });
@@ -429,7 +432,7 @@ test("Apply to all inputs copies the chosen input's mode; a picture reset also c
 test("the sound reset restores LG's keys for the sound mode, which only Standard offers", () => {
   const reset = { key: "soundReset", kind: "action", action: { reset: "sound" }, greyedWhen: { key: "soundMode", except: ["standard"], reason: "Standard only" } };
   const standard = { values: { soundMode: "standard" }, descs: {}, notes: {}, context: {}, now: {} };
-  assert.deepStrictEqual(SettingsLogic.actionOperations(reset, standard, {}),
+  assert.deepStrictEqual(SettingsLogic.actionOperations(reset, standard),
     [{ method: "resetSystemSettings", params: { category: "sound", keys: ["audioBalance", "userEqualizerValues", "soundModeModified"] } }]);
   assert.deepStrictEqual(SettingsLogic.soundResetKeys("movie"), ["audioBalance", "soundModeModified"]);
   assert.strictEqual(SettingsLogic.rowView(reset, standard).greyed, false);
@@ -444,11 +447,13 @@ test("a row that asks before its first change asks once while it is being change
   assert.strictEqual(SettingsLogic.needsConfirm(row, 3, true), false);
 });
 
-test("Sound out offers the TV speaker and the outputs the audio service lists", () => {
+test("Sound out offers the TV speaker and optical always, and the outputs the audio service names", () => {
   const rows = [{ key: "soundOutput", source: "soundOut", kind: "choice" }];
+  // As the TV answered after Home switched to the TV speaker: the list holds only the output in use.
   const { state } = SettingsLogic.applySources(SettingsLogic.emptyPageState(), rows,
-    [{ soundOutput: "tv_external_speaker", settingsSoundOutputs: ["tv_external_speaker"] }], {});
-  assert.deepStrictEqual(SettingsLogic.rowView(rows[0], state).values, ["tv_speaker", "tv_external_speaker"]);
+    [{ soundOutput: "tv_speaker", lastSoundOutput: "external_arc", settingsSoundOutputs: ["tv_speaker"] }], {});
+  assert.deepStrictEqual(SettingsLogic.rowView(rows[0], state).values, ["tv_speaker", "tv_external_speaker", "external_optical", "external_arc"],
+    "so it can switch back");
   assert.deepStrictEqual(SettingsLogic.sourceWrite(rows[0], "tv_speaker"),
     ["luna://com.webos.settingsservice/setSystemSettings", { category: "sound", settings: { soundOutput: "tv_speaker" } }]);
 });
@@ -478,4 +483,15 @@ test("grayscale turns screen zoom off first, then writes both colour filters wit
     { screenMagnification: "off" },
     { adjustments: { blackAndWhite: "on", colorInversion: "off" }, highContrast: "off", focusEmphasis: "off" }
   ]);
+});
+
+test("on/off choices go off first, so Left turns a switch off and Right on", () => {
+  const row = { key: "wolwowlOnOff", category: "network", kind: "choice" };
+  const state = { values: { wolwowlOnOff: "true" }, descs: { wolwowlOnOff: { dims: [], visible: true, active: true,
+    choices: [{ value: "true" }, { value: "false" }] } }, notes: {}, context: {}, now: {} };
+  const view = SettingsLogic.rowView(row, state);
+  assert.deepStrictEqual(view.values, ["false", "true"]);
+  assert.strictEqual(SettingsLogic.nextRowValue(row, view, -1), "false");
+  state.descs.wolwowlOnOff.choices = [{ value: "low" }, { value: "high" }];
+  assert.deepStrictEqual(SettingsLogic.rowView(row, Object.assign({}, state, { values: { wolwowlOnOff: "low" } })).values, ["low", "high"], "other pairs keep the TV's order");
 });

@@ -52,7 +52,7 @@ BrowserTest.define("Sound shows the delay of the output in use, which Bypass gre
   t.key("DOWN");
   t.equal(t.focused(), pageRow(t, "sound", "avSyncBypassInput"));
   t.key("OK");
-  t.key("LEFT");
+  t.key("RIGHT");
   t.equal(pageValue(t, "sound", "avSyncBypassInput"), "On");
   t.ok(pageRow(t, "sound", "avSyncSpeaker").classList.contains("is-greyed"), "Bypass greys the delay");
 });
@@ -124,7 +124,7 @@ BrowserTest.define("text with high contrast also turns grayscale and invert colo
   t.equal(pageValue(t, "accessibility", "subtitleLanguageFirst"), "Swedish");
   t.ok(pageRow(t, "accessibility", "audioDescriptionVolume").hidden, "the volume shows with audio description on");
   t.key("OK");
-  t.key("LEFT");
+  t.key("RIGHT");
   await t.until(() => t.tv().written.length === 2, 3000, "the write");
   t.equal(t.tv().written, [["highContrast", "on"], ["adjustments", { blackAndWhite: "off", colorInversion: "off" }]]);
   t.equal(t.tv().counts.luna, 1, "in one call");
@@ -189,6 +189,10 @@ BrowserTest.define("Sound out switches among the TV speaker and the outputs the 
   t.equal(t.tv().writes[0], { category: "sound", settings: { soundOutput: "tv_speaker" }, dimension: null });
   t.equal(pageValue(t, "sound", "soundOutput"), "TV Speaker");
   await t.until(() => pageRow(t, "sound", "avSyncSpeaker") && !pageRow(t, "sound", "avSyncSpeaker").hidden, 3000, "the delay of the TV speaker");
+  await t.wait(1500);
+  t.key("RIGHT");
+  await t.until(() => t.tv().writes.length === 2, 3000, "back, after the TV's list shrank to the TV speaker");
+  t.equal(t.tv().writes[1].settings, { soundOutput: "tv_external_speaker" });
 });
 
 BrowserTest.define("only the Standard sound mode can be reset, as in LG Settings", { tv: { settings: { sound: { soundMode: "movie" } } } }, async (t) => {

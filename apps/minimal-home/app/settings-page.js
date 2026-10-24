@@ -31,6 +31,7 @@ var SettingsPage = (function () {
     var modeLabels = (rows.filter(function (row) { return row.key === "pictureMode"; })[0] || {}).labels;
     var view = null;
     var list = null;
+    var side = null;
     var card = null;
     var lgButton = null;
     var selected = null;
@@ -106,7 +107,10 @@ var SettingsPage = (function () {
       if (list) { return; }
       var body = view.querySelector(".page-body");
       list = element("div", "page-list");
-      if (page.context) { list.appendChild(makeRow(APPLIES_TO, "Applies to", "choice")); }
+      if (page.context) {
+        list.appendChild(element("h3", "page-section", "Input"));
+        list.appendChild(makeRow(APPLIES_TO, "Applies to", "choice"));
+      }
       page.sections.forEach(function (section, index) {
         var heading = element("h3", "page-section", section.title);
         heading.setAttribute("data-section", String(index));
@@ -126,8 +130,12 @@ var SettingsPage = (function () {
       lgButton.type = "button";
       lgButton.addEventListener("click", openLg);
       card.appendChild(lgButton);
+      // The card moves beside the focused row (placeCard), in a column of its own.
+      side = element("div", "page-side");
+      side.appendChild(card);
       body.appendChild(list);
-      body.appendChild(card);
+      body.appendChild(side);
+      list.addEventListener("scroll", placeCard);
       // The first row, although hidden until the values are read; renderAll then moves the focus to
       // the first row shown.
       setFocus(list.querySelector(".setting"));
@@ -156,7 +164,9 @@ var SettingsPage = (function () {
       node.classList.toggle("is-busy", writing === row.key);
       node.classList.toggle("is-proposed", (!!proposed && proposed.key === row.key) || armed === row.key);
       node.querySelector(".value").textContent = armed === row.key ? "OK again" : info.text;
-      node.querySelector("small").textContent = info.note || (page.context && !info.perInput && row.kind !== "link" ? "Every input" : "");
+      // On a page with "Applies to", a setting the TV keeps for every input says so.
+      var everyInput = page.context && state.descs[row.key] && !info.perInput && row.kind !== "link" && row.kind !== "action";
+      node.querySelector("small").textContent = info.note || (everyInput ? "Every input" : "");
       if (row.kind === "range") { node.querySelector(".range").style.setProperty("--fill", info.fill + "%"); }
       renderDirections(node, row, info);
     }
@@ -200,6 +210,19 @@ var SettingsPage = (function () {
         text.reason = info.greyed ? info.reason + "." : "";
       }
       Object.keys(text).forEach(function (name) { card.querySelector(".card-" + name).textContent = text[name]; });
+      placeCard();
+    }
+
+    // Puts the card's top level with the focused row's (the row the card's button was reached from),
+    // as far as the card still fits in its column.
+    function placeCard() {
+      var node = selected === lgButton ? cardReturn : selected;
+      var top = 0;
+      if (node && !node.hidden) {
+        top = node.getBoundingClientRect().top - side.getBoundingClientRect().top;
+        top = Math.max(0, Math.min(side.clientHeight - card.offsetHeight, top));
+      }
+      card.style.top = Math.round(top) + "px";
     }
 
     function renderAll() {
@@ -334,7 +357,7 @@ var SettingsPage = (function () {
     // page again.
     function runAction(row) {
       armed = null;
-      var operations = SettingsLogic.actionOperations(row, state, page);
+      var operations = SettingsLogic.actionOperations(row, state);
       renderAll();
       if (!operations) {
         setStatus("Could not run " + row.label + ": the input isn't known yet", "error");

@@ -307,7 +307,8 @@
     }
     if (/systemproperty\/getSystemInfo$/.test(method)) { return { returnValue: true, modelName: "65QNED80T6A.BEUFLJP", firmwareVersion: "33.31.75" }; }
     if (/audio\/getSoundOutput$/.test(method)) {
-      return { returnValue: true, soundOutput: valueOf("sound", "soundOutput", { audioOutput: tv.now.audioOutput }), settingsSoundOutputs: ["tv_external_speaker"] };
+      var output = valueOf("sound", "soundOutput", { audioOutput: tv.now.audioOutput });
+      return { returnValue: true, soundOutput: output, lastSoundOutput: "none", settingsSoundOutputs: [output] };
     }
     if (/osInfo\/query$/.test(method)) { return { returnValue: true, webos_name: "webOS TV Lite", webos_release: "10.3.2" }; }
     if (/eim\/getAllInputStatus$/.test(method)) {
