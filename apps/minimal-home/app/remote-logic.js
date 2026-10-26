@@ -10,6 +10,19 @@ var RemoteLogic = (function () {
   var SCREEN_TOGGLE = "if luna-send -n 1 -f luna://com.webos.service.tvpower/power/getPowerState '{}' </dev/null | grep -q '\"Screen Off\"'; " +
     "then " + POWER + "turnOnScreen '{}' </dev/null >/dev/null; " +
     "else " + POWER + "turnOffScreen '{}' </dev/null >/dev/null; fi";
+  // Restarts the app on screen, for one that misbehaves: closes it through the app manager, waits up
+  // to 5 s for it to stop (then kills its process if it has one), and opens it again. Minimal Home and
+  // LG's Home are left alone. It runs in the background: the hook waits for a command's output, and
+  // the remote would wait with it.
+  var APPS = "luna-send -n 1 luna://com.webos.service.applicationManager/";
+  var RUNNING = APPS + "running '{}' </dev/null | tr '{' '\\n' | grep \"\\\"id\\\":\\\"$app\\\"\"";
+  var RESTART_APP = "( app=$(" + APPS + "getForegroundAppInfo '{}' </dev/null | sed -n 's/.*\"appId\":\"\\([^\"]*\\)\".*/\\1/p'); " +
+    "case \"$app\" in ''|org.webosbrew.minimalhome|com.webos.app.home) exit 0 ;; esac; " +
+    APPS + "closeByAppId \"{\\\"id\\\":\\\"$app\\\"}\" </dev/null >/dev/null; " +
+    "i=0; while [ $i -lt 20 ] && " + RUNNING + " >/dev/null; do usleep 250000; i=$((i + 1)); done; " +
+    "pid=$(" + RUNNING + " | sed -n 's/.*\"processid\":\"\\([0-9][0-9]*\\)\".*/\\1/p'); " +
+    "if [ -n \"$pid\" ]; then kill -9 $pid; sleep 1; fi; " +
+    APPS + "launch \"{\\\"id\\\":\\\"$app\\\"}\" </dev/null >/dev/null ) </dev/null >/dev/null 2>&1 &";
   // Buttons of the MR24 remote in reading order: the codes the hook logs (checked by pressing every
   // button), a short label for the drawing, and the button's centre and size on a 210 x 960 grid
   // traced from a photo (x from the remote's left edge, y from its top). Buttons marked `keep` are never
@@ -150,7 +163,8 @@ var RemoteLogic = (function () {
     var list = [
       { label: "Normal", bind: null },
       { label: "Disabled", bind: { action: "ignore" } },
-      { label: "Screen on/off", bind: { action: "exec", command: SCREEN_TOGGLE } }
+      { label: "Screen on/off", bind: { action: "exec", command: SCREEN_TOGGLE } },
+      { label: "Restart the app on screen", bind: { action: "exec", command: RESTART_APP } }
     ];
     HOME_VIEWS.forEach(function (entry) {
       list.push({ label: entry.label, bind: { action: "exec", command: "luna-send -n 1 luna://com.webos.service.applicationManager/launch " +
@@ -331,7 +345,7 @@ var RemoteLogic = (function () {
   }
 
   return {
-    MR24: MR24, HOME: HOME, SCREEN_TOGGLE: SCREEN_TOGGLE, buttonFor: buttonFor, isKept: isKept, nameFor: nameFor,
+    MR24: MR24, HOME: HOME, SCREEN_TOGGLE: SCREEN_TOGGLE, RESTART_APP: RESTART_APP, buttonFor: buttonFor, isKept: isKept, nameFor: nameFor,
     displayName: displayName, nearestButton: nearestButton, stopStreak: stopStreak, STOP_PRESSES: STOP_PRESSES,
     listedCodes: listedCodes, testCodes: testCodes, disabledBinds: disabledBinds, sameBind: sameBind, indexOf: indexOf,
     choices: choices, defaultBinds: defaultBinds, customBinds: customBinds, TEMPLATES: TEMPLATES, templateName: templateName,

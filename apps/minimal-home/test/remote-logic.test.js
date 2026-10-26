@@ -43,10 +43,10 @@ test("a binding made elsewhere stays on offer as Custom after stepping away from
   const apps = [{ id: "netflix", title: "Netflix" }];
   const now = RemoteLogic.choices(apps, handMade, handMade);
   assert.deepStrictEqual(now.map((choice) => choice.label), ["Normal", "Custom", "Disabled", "Screen on/off",
-    "Open Sources", "Open Home settings", "Acts as Back", "Acts as OK", "Acts as Up", "Acts as Down", "Acts as Left", "Acts as Right", "Acts as Home", "Open Netflix"]);
+    "Restart the app on screen", "Open Sources", "Open Home settings", "Acts as Back", "Acts as OK", "Acts as Up", "Acts as Down", "Acts as Left", "Acts as Right", "Acts as Home", "Open Netflix"]);
   const later = RemoteLogic.choices(apps, { action: "ignore" }, handMade);
   assert.strictEqual(later[RemoteLogic.indexOf(later, handMade)].label, "Custom");
-  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 13, "standard bindings add no Custom");
+  assert.strictEqual(RemoteLogic.choices(apps, SCREEN, null).length, 14, "standard bindings add no Custom");
 });
 
 test("only non-standard bindings are remembered as Custom", () => {
@@ -190,4 +190,60 @@ test("the preset row steps through the presets only; the menu acts on the one sh
   const two = RemoteLogic.withNewPreset(one, "blank", "Living room");
   assert.deepStrictEqual(RemoteLogic.presetChoices(two).map((choice) => choice.label), ["LG MR24", "Living room"]);
   assert.deepStrictEqual(RemoteLogic.presetActions(two).map((action) => action.label), ["New preset…", "Rename “Living room”…", "Delete “Living room”…"]);
+});
+
+// Runs the restart command in a real shell with a fake luna-send (and usleep) first in PATH: the app
+// manager in front is FG, the running apps are in a file, and closeByAppId stops an app unless STUCK
+// is set. Returns the luna calls made, once the backgrounded restart has finished.
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { execFileSync } = require("child_process");
+
+async function runRestart(foreground, running, stuck) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "restart-app-"));
+  fs.writeFileSync(path.join(dir, "running"), running.join("\n") + "\n");
+  fs.writeFileSync(path.join(dir, "luna-send"), `#!/bin/sh
+uri=$3; payload=$4; method=\${uri##*/}
+echo "$method $payload" >> "$DIR/calls"
+case "$method" in
+  getForegroundAppInfo) echo "{\\"returnValue\\":true,\\"appId\\":\\"$FG\\",\\"windowId\\":\\"\\"}" ;;
+  closeByAppId) [ -n "$STUCK" ] || grep -v "$(echo "$payload" | sed 's/.*"id":"\\([^"]*\\)".*/\\1/')" "$DIR/running" > "$DIR/r"; [ -n "$STUCK" ] || mv "$DIR/r" "$DIR/running"; echo '{"returnValue":true}' ;;
+  running) printf '{"returnValue":true,"running":['; sed 's/^\\(.*\\)$/{"id":"\\1","processid":""},/' "$DIR/running" | tr -d '\\n'; echo '{}]}' ;;
+  launch) echo '{"returnValue":true}' ;;
+esac
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, "usleep"), "#!/bin/sh\n", { mode: 0o755 });
+  const env = Object.assign({}, process.env, { PATH: dir + ":" + process.env.PATH, DIR: dir, FG: foreground, STUCK: stuck ? "1" : "" });
+  execFileSync("sh", ["-c", RemoteLogic.RESTART_APP], { env });
+  const calls = () => (fs.existsSync(path.join(dir, "calls")) ? fs.readFileSync(path.join(dir, "calls"), "utf8").trim().split("\n") : []);
+  for (let i = 0; i < 100 && !calls().some((call) => /^launch/.test(call)) && !(calls().length === 1 && !/youtube|netflix/.test(foreground)); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const made = calls();
+  fs.rmSync(dir, { recursive: true, force: true });
+  return made;
+}
+
+test("Restart the app on screen closes it, waits until it has stopped, and opens it again", async () => {
+  const calls = await runRestart("youtube.leanback.v4", ["youtube.leanback.v4", "netflix"]);
+  assert.deepStrictEqual(calls, [
+    "getForegroundAppInfo {}",
+    'closeByAppId {"id":"youtube.leanback.v4"}',
+    "running {}",
+    "running {}",
+    'launch {"id":"youtube.leanback.v4"}'
+  ]);
+});
+
+test("Restart gives up waiting after 5 s for an app that doesn't stop, and opens it anyway", async () => {
+  const calls = await runRestart("netflix", ["netflix"], true);
+  assert.strictEqual(calls.filter((call) => call === "running {}").length, 21, "20 checks a quarter second apart, then one for its process");
+  assert.strictEqual(calls[calls.length - 1], 'launch {"id":"netflix"}');
+});
+
+test("Restart leaves Home alone", async () => {
+  assert.deepStrictEqual(await runRestart("org.webosbrew.minimalhome", ["org.webosbrew.minimalhome"]), ["getForegroundAppInfo {}"]);
+  assert.ok(RemoteLogic.choices([], null, null).some((choice) => choice.label === "Restart the app on screen"), "offered for every button");
 });
