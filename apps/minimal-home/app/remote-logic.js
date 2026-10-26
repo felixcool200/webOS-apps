@@ -12,8 +12,8 @@ var RemoteLogic = (function () {
     "else " + POWER + "turnOffScreen '{}' </dev/null >/dev/null; fi";
   // Restarts the app on screen, for one that misbehaves: closes it through the app manager, waits up
   // to 5 s for it to stop (then kills its process if it has one), and opens it again. Minimal Home and
-  // LG's Home are left alone. It runs in the background: the hook waits for a command's output, and
-  // the remote would wait with it.
+  // LG's Home are left alone. The hook runs every command with " &" appended, in the background, so
+  // a command must not end with "&" itself: "& &" is a syntax error, and then nothing runs.
   var APPS = "luna-send -n 1 luna://com.webos.service.applicationManager/";
   var RUNNING = APPS + "running '{}' </dev/null | tr '{' '\\n' | grep \"\\\"id\\\":\\\"$app\\\"\"";
   var RESTART_APP = "( app=$(" + APPS + "getForegroundAppInfo '{}' </dev/null | sed -n 's/.*\"appId\":\"\\([^\"]*\\)\".*/\\1/p'); " +
@@ -22,7 +22,7 @@ var RemoteLogic = (function () {
     "i=0; while [ $i -lt 20 ] && " + RUNNING + " >/dev/null; do usleep 250000; i=$((i + 1)); done; " +
     "pid=$(" + RUNNING + " | sed -n 's/.*\"processid\":\"\\([0-9][0-9]*\\)\".*/\\1/p'); " +
     "if [ -n \"$pid\" ]; then kill -9 $pid; sleep 1; fi; " +
-    APPS + "launch \"{\\\"id\\\":\\\"$app\\\"}\" </dev/null >/dev/null ) </dev/null >/dev/null 2>&1 &";
+    APPS + "launch \"{\\\"id\\\":\\\"$app\\\"}\" </dev/null >/dev/null ) </dev/null >/dev/null 2>&1";
   // Buttons of the MR24 remote in reading order: the codes the hook logs (checked by pressing every
   // button), a short label for the drawing, and the button's centre and size on a 210 x 960 grid
   // traced from a photo (x from the remote's left edge, y from its top). Buttons marked `keep` are never

@@ -192,9 +192,10 @@ test("the preset row steps through the presets only; the menu acts on the one sh
   assert.deepStrictEqual(RemoteLogic.presetActions(two).map((action) => action.label), ["New preset…", "Rename “Living room”…", "Delete “Living room”…"]);
 });
 
-// Runs the restart command in a real shell with a fake luna-send (and usleep) first in PATH: the app
-// manager in front is FG, the running apps are in a file, and closeByAppId stops an app unless STUCK
-// is set. Returns the luna calls made, once the backgrounded restart has finished.
+// Runs the restart command in a real shell as the input hook does (with " &" appended), with a fake
+// luna-send (and usleep) first in PATH: the app manager in front is FG, the running apps are in a
+// file, and closeByAppId stops an app unless STUCK is set. Returns the luna calls made, once the
+// backgrounded restart has finished.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -215,7 +216,7 @@ esac
 `, { mode: 0o755 });
   fs.writeFileSync(path.join(dir, "usleep"), "#!/bin/sh\n", { mode: 0o755 });
   const env = Object.assign({}, process.env, { PATH: dir + ":" + process.env.PATH, DIR: dir, FG: foreground, STUCK: stuck ? "1" : "" });
-  execFileSync("sh", ["-c", RemoteLogic.RESTART_APP], { env });
+  execFileSync("sh", ["-c", RemoteLogic.RESTART_APP + " &"], { env });
   const calls = () => (fs.existsSync(path.join(dir, "calls")) ? fs.readFileSync(path.join(dir, "calls"), "utf8").trim().split("\n") : []);
   for (let i = 0; i < 100 && !calls().some((call) => /^launch/.test(call)) && !(calls().length === 1 && !/youtube|netflix/.test(foreground)); i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -241,6 +242,12 @@ test("Restart gives up waiting after 5 s for an app that doesn't stop, and opens
   const calls = await runRestart("netflix", ["netflix"], true);
   assert.strictEqual(calls.filter((call) => call === "running {}").length, 21, "20 checks a quarter second apart, then one for its process");
   assert.strictEqual(calls[calls.length - 1], 'launch {"id":"netflix"}');
+});
+
+test("bound commands don't end with & themselves, since the hook adds one", () => {
+  RemoteLogic.choices([], null, null).filter((choice) => choice.bind && choice.bind.action === "exec").forEach((choice) => {
+    assert.doesNotThrow(() => execFileSync("sh", ["-n", "-c", choice.bind.command + " &"]), choice.label + " parses with the hook's \" &\"");
+  });
 });
 
 test("Restart leaves Home alone", async () => {
