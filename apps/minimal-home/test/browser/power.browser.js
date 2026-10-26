@@ -52,3 +52,17 @@ BrowserTest.define("Up from the app grid reaches the power button next to Settin
   t.key("LEFT");
   t.equal(t.focused().id, "settings");
 });
+
+BrowserTest.define("a resting pointer under the popup doesn't move the focus off Cancel; a real move does", {}, async (t) => {
+  await t.homeReady();
+  openPowerMenu(t);
+  const restart = t.$('[data-power="restart"]').getBoundingClientRect();
+  const x = restart.left + restart.width / 2;
+  const y = restart.top + restart.height / 2;
+  const move = (dx) => t.$('[data-power="restart"]').dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x + dx, clientY: y }));
+  move(0);
+  move(2);
+  t.equal(t.focused().getAttribute("data-power"), "cancel", "as when the popup appears under the pointer");
+  move(20);
+  t.equal(t.focused().getAttribute("data-power"), "restart");
+});

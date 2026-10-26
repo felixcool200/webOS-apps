@@ -15,6 +15,10 @@ var PowerMenu = (function () {
   var menu = null;
   var selected = null;
   var onClose = null;
+  // Where the pointer was first seen while the popup is open. The popup can appear under a resting
+  // pointer, and the browser then reports a move over whatever is under it; only a real move from
+  // there moves the focus, so it stays on Cancel.
+  var pointerStart = null;
 
   function setStatus(message, type) {
     UI.setStatus("power-status", message, type);
@@ -31,6 +35,7 @@ var PowerMenu = (function () {
   // Opens the popup with the focus on Cancel; `done` runs when it closes.
   function open(done) {
     onClose = done;
+    pointerStart = null;
     menu.hidden = false;
     setStatus("");
     setFocus(menu.querySelector('[data-power="cancel"]'));
@@ -68,8 +73,13 @@ var PowerMenu = (function () {
     }
   }
 
-  // The pointer moves the same focus as the arrows.
+  // The pointer moves the same focus as the arrows, once it has really moved.
   function handlePointer(event) {
+    if (!pointerStart) {
+      pointerStart = { x: event.clientX, y: event.clientY };
+      return;
+    }
+    if (Math.abs(event.clientX - pointerStart.x) + Math.abs(event.clientY - pointerStart.y) <= 8) { return; }
     var node = event.target.closest && event.target.closest("#power-menu .focusable");
     if (node && node !== selected) { setFocus(node); }
   }
