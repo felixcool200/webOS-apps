@@ -48,7 +48,7 @@ GET https://transport.integration.sl.se/v1/sites/{siteId}/departures?transport=B
 
 Site ids come from `https://transport.integration.sl.se/v1/sites`. Two sites are named Ropsten; 9220 is the one in Stockholm. The API returns at most three departures per line and direction, so the metro falls back to three trains.
 
-SL sometimes answers with an empty list for a stop that has traffic. An empty answer only replaces departures that are more than two minutes old.
+SL often answers a stop that has traffic with `{"departures": [], "stop_deviations": []}`. On 26 October 2026 two of three answers were empty, with up to 10 in a row, whether requests were 2, 30, 60 or 120 seconds apart and whatever the query parameters. A stop keeps its last full answer, departures and notices together, through up to 20 empty answers in a row; that is ten minutes of SL. The limit counts answers rather than minutes because the Trafiklab interval can be changed, and Trafiklab answers get the same rule.
 
 Both APIs send `Access-Control-Allow-Origin: *`, so the app calls them directly without the root exec service. Both give Stockholm local times without an offset. The app converts the current time to Europe/Stockholm before comparing, so the countdown does not depend on the TV's time zone setting.
 

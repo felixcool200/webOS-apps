@@ -75,6 +75,21 @@ var DeparturesLogic = (function () {
     return recent && (!trafiklab.error || stop.sl.error) ? trafiklab : stop.sl;
   }
 
+  // SL now and then answers a stop that has traffic with `{"departures": [], "stop_deviations": []}`.
+  // Up to `limit` empty answers in a row leave the last full answer in place. Returns whether
+  // `departures` replaced the source's.
+  function accept(source, departures, limit, nowMs) {
+    source.error = null;
+    if (!departures.length && source.departures.length && source.emptyAnswers < limit) {
+      source.emptyAnswers += 1;
+      return false;
+    }
+    source.departures = departures;
+    source.emptyAnswers = 0;
+    source.updated = nowMs;
+    return true;
+  }
+
   // Departures not yet gone, soonest first; one that left less than a minute ago still shows "Now".
   function upcoming(source, now) {
     return source.departures.filter(function (entry) {
@@ -98,7 +113,7 @@ var DeparturesLogic = (function () {
   return {
     STATE_LABELS: STATE_LABELS, parseWallClock: parseWallClock, pad: pad, clockText: clockText,
     relevantDeviations: relevantDeviations, fromSl: fromSl, fromTrafiklab: fromTrafiklab, isTop: isTop,
-    pick: pick, upcoming: upcoming, countdown: countdown
+    pick: pick, accept: accept, upcoming: upcoming, countdown: countdown
   };
 }());
 

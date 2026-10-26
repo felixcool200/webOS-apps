@@ -30,9 +30,10 @@
   // Trafiklab caches answers for 60 s.
   var TRAFIKLAB_SECONDS = { initial: 90, min: 60, max: 600, step: 15 };
   var TRAFIKLAB_SECONDS_KEY = "departures.trafiklabSeconds";
-  // SL now and then answers with an empty list for a stop that has traffic. An empty answer
-  // only replaces departures that are older than this.
-  var EMPTY_GRACE_MS = 2 * 60000;
+  // Empty answers in a row that keep a stop's last full answer (see Logic.accept), counted in answers
+  // because the Trafiklab interval can be changed. On 26 October 2026 two of three SL answers were
+  // empty whatever the gap between requests, with up to 10 in a row; 20 is ten minutes of SL.
+  var EMPTY_ANSWERS_KEPT = 20;
   var RENDER_MS = 5000;
   // Short enough that the seconds never visibly skip; tick() only touches cells whose text changes.
   var TICK_MS = 250;
@@ -42,7 +43,7 @@
   var Logic = DeparturesLogic;
   var clockText = Logic.clockText;
   function emptySource(name) {
-    return { name: name, departures: [], updated: 0, error: null };
+    return { name: name, departures: [], updated: 0, emptyAnswers: 0, error: null };
   }
   var stops = STOPS.map(function (stop) {
     return { config: stop, sl: emptySource("SL"), trafiklab: emptySource("Trafiklab"), deviations: [] };
@@ -209,10 +210,7 @@
   }
 
   function accept(source, departures) {
-    source.error = null;
-    if (!departures.length && source.departures.length && Date.now() - source.updated < EMPTY_GRACE_MS) { return; }
-    source.departures = departures;
-    source.updated = Date.now();
+    return Logic.accept(source, departures, EMPTY_ANSWERS_KEPT, Date.now());
   }
 
   function fail(stop, source, error) {
@@ -223,8 +221,10 @@
   function loadSl(stop) {
     var url = SL_API + stop.config.id + "/departures?transport=" + stop.config.mode + "&forecast=" + FORECAST_MINUTES;
     return getJson(url).then(function (data) {
-      stop.deviations = Logic.relevantDeviations(data.stop_deviations || [], stop.config.mode);
-      accept(stop.sl, (data.departures || []).map(Logic.fromSl));
+      // An empty answer has no notices either, so the notices stay with the departures they came with.
+      if (accept(stop.sl, (data.departures || []).map(Logic.fromSl))) {
+        stop.deviations = Logic.relevantDeviations(data.stop_deviations || [], stop.config.mode);
+      }
     }).catch(function (error) { fail(stop, stop.sl, error); });
   }
 

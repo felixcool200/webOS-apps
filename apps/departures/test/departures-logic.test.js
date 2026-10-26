@@ -65,6 +65,23 @@ test("Trafiklab is used while it is recent and working, SL otherwise", () => {
   assert.strictEqual(Logic.pick({ sl, trafiklab: { departures: [], updated: 1000, error: null } }, 1500, 1000), sl, "empty");
 });
 
+test("empty answers keep the last full one until too many come in a row", () => {
+  const full = [{ line: "206" }];
+  const source = { departures: [], updated: 0, emptyAnswers: 0, error: new Error("HTTP 500") };
+  assert.strictEqual(Logic.accept(source, [], 2, 1000), true, "nothing to keep yet");
+  assert.strictEqual(Logic.accept(source, full, 2, 2000), true);
+  assert.strictEqual(source.error, null);
+  assert.strictEqual(Logic.accept(source, [], 2, 3000), false);
+  assert.strictEqual(Logic.accept(source, [], 2, 4000), false);
+  assert.deepStrictEqual([source.departures, source.updated], [full, 2000], "kept, still dated from the full answer");
+  assert.strictEqual(Logic.accept(source, [], 2, 5000), true, "the third empty answer in a row replaces it");
+  assert.deepStrictEqual([source.departures, source.updated], [[], 5000]);
+  Logic.accept(source, full, 2, 6000);
+  Logic.accept(source, [], 2, 7000);
+  Logic.accept(source, full, 2, 8000);
+  assert.strictEqual(Logic.accept(source, [], 2, 9000), false, "a full answer starts the count again");
+});
+
 test("stop notices keep the ones for the column's mode, once each", () => {
   const bus = { message: "Bus stop moved", scope: { lines: [{ transport_mode: "BUS" }] } };
   const tram = { message: "No trams", scope: { lines: [{ transport_mode: "TRAM" }] } };
