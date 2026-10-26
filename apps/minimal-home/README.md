@@ -1,6 +1,6 @@
 # Minimal Home for webOS
 
-A small, local launcher for a rooted LG webOS TV. It shows a clock and date, installed apps in two rows, and two system actions: Sources and a Settings cog. (LG's Profile panel was dropped: it loads LG's online account page and took about 6 s to appear.)
+A small, local launcher for a rooted LG webOS TV. It shows a clock and date, installed apps in two rows, and three system actions: Sources, a Settings cog and a power button. (LG's Profile panel was dropped: it loads LG's online account page and took about 6 s to appear.)
 
 The local hidden-app list excludes Alexa, Camera, Sports, Home Hub, LG Channels, LG Gallery+, and Media Player.
 
@@ -12,9 +12,13 @@ The Sources button, left of the Settings cog, opens a view of Live TV and the TV
 
 The remote's Input button opens this view, and its Settings button opens Home's Settings view: the boot script sets these bindings up on a new TV, and they can be changed on the Remote buttons page. A button set to Open Sources opens the view straight away from anywhere: it launches Home with `{"view": "sources"}`. Open Home settings does the same for the Settings view. The inputs are read with `luna://com.webos.service.eim/getAllInputStatus` and `getLastInput`, a second after Home comes on screen and again on every open. The rules are in `app/sources-logic.js`, tested by `test/sources-logic.test.js`.
 
+## Power
+
+The power button, right of the Settings cog, opens a popup with Turn off, Restart and Cancel; the focus starts on Cancel, and Back closes it. Turn off calls `tvpower/power/powerOff` with the reason the remote's power button gives (`remoteKey`), so with Quick Start+ on the TV goes to standby, as with the remote. Restart is a full restart, `tvpower/power2/reboot` with reason `micomReset`, as LG Settings restarts the TV: every service and app starts over and the Home redirect is set up again, which cleared YouTube's black video on 2026-10-26 (a power-button press does not restart anything while Quick Start+ keeps the TV in standby).
+
 ## Remote buttons
 
-Settings has a Remote buttons page that decides what each button on the remote (an LG MR24 Magic Remote) does: Normal, Disabled, Screen on/off (LG's own Screen Off mode, picture dark and sound on), Open Sources or Open Home settings, Acts as Back, OK, an arrow or Home (so another remote's buttons can work the TV), or Open an app. It lists every button except Power, which never reaches the TV's software, and OK, the arrows, Back, and Home, which stay as they are so the remote remains usable.
+Settings has a Remote buttons page that decides what each button on the remote (an LG MR24 Magic Remote) does: Normal, Disabled, Screen on/off (LG's own Screen Off mode, picture dark and sound on), Restart the app on screen (closes it through the app manager, waits up to 5 s for it to stop, kills its process if it has one, and opens it again; Home is left alone), Open Sources or Open Home settings, Acts as Back, OK, an arrow or Home (so another remote's buttons can work the TV), or Open an app. It lists every button except Power, which never reaches the TV's software, and OK, the arrows, Back, and Home, which stay as they are so the remote remains usable.
 
 As in the Settings view, OK on a row lets Left/Right change its action, and OK or Back finishes. Each row shows the button's code under its name. Next to the list is a drawing of the remote (with presets made from the LG MR24 template) that outlines the button of the selected row. Right from the list moves into the drawing, where the arrows (or the pointer) move between buttons and OK opens that button's row to change it; Up and Down past its edges lead to Test remote and the remote choice. Changes take effect right away. A binding made some other way shows as Custom and stays on offer after choosing something else, so it can be chosen again.
 

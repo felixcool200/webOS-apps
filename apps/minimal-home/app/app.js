@@ -401,8 +401,11 @@
     if (selected && selected.scrollIntoView) { selected.scrollIntoView({ block: "nearest", inline: "nearest" }); }
   }
 
+  // The view's focusable elements, leaving out those inside something hidden (the power menu).
   function focusables() {
-    return Array.prototype.slice.call(document.querySelectorAll("#" + view + "-view .focusable"));
+    return Array.prototype.filter.call(document.querySelectorAll("#" + view + "-view .focusable"), function (item) {
+      return !item.closest("[hidden]");
+    });
   }
 
   function tilesOf(grid) {
@@ -506,6 +509,10 @@
 
   function initNavigation() {
     document.addEventListener("keydown", function (event) {
+      if (PowerMenu.isOpen()) {
+        PowerMenu.handleKey(event);
+        return;
+      }
       var module = VIEWS[view].module;
       if (module) {
         if (module.handleKey(event) === "leave") { showView(VIEWS[view].back); }
@@ -553,6 +560,10 @@
     // The pointer moves the same focus as the arrows. There is no CSS :hover highlight, because the
     // browser keeps :hover on the last pointed-at tile after an arrow press hides the pointer.
     document.addEventListener("mousemove", function (event) {
+      if (PowerMenu.isOpen()) {
+        PowerMenu.handlePointer(event);
+        return;
+      }
       if (VIEWS[view].module) {
         VIEWS[view].module.handlePointer(event);
         return;
@@ -590,13 +601,24 @@
     initNavigation();
     document.getElementById("settings").addEventListener("click", function () { showView("settings"); });
     document.getElementById("sources-button").addEventListener("click", function () { showView("sources"); });
+    // The power menu takes the focus while it is open and gives it back to its button.
+    PowerMenu.attach();
+    document.getElementById("power-button").addEventListener("click", function () {
+      var button = document.getElementById("power-button");
+      setFocus(null);
+      PowerMenu.open(function () { setFocus(button); });
+    });
     var host = { navigate: showView, apps: function () { return installed; }, setLinkValue: MinimalSettings.setLinkValue };
     Object.keys(VIEWS).forEach(function (name) {
       if (VIEWS[name].module) { VIEWS[name].module.attach(host); }
     });
     // The Home key activates Home again and leads to the app grid; a remote button bound to a view
     // (Open Sources) relaunches it with that view.
-    document.addEventListener("webOSRelaunch", function (event) { stopArranging(); showView(viewFromParams(event.detail)); });
+    document.addEventListener("webOSRelaunch", function (event) {
+      PowerMenu.close();
+      stopArranging();
+      showView(viewFromParams(event.detail));
+    });
     var system = window.webOSSystem || window.PalmSystem;
     showView(viewFromParams(system && system.launchParams));
     tickClock();

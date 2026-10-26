@@ -24,6 +24,9 @@
           <!-- The cog's shape spans x 4.1-21.5, so the view box is shifted 0.8 to centre it in the circle. -->
           <svg viewBox="0.8 0 24 24" aria-hidden="true"><path d="m19.4 13 .1-1-.1-1 2.1-1.6-2-3.5-2.6 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1L6.1 5.9l-2 3.5L6.2 11a8 8 0 0 0-.1 1l.1 1-2.1 1.6 2 3.5 2.6-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.6 1 2-3.5L19.4 13ZM12.8 15.6a3.7 3.7 0 1 1 0-7.3 3.7 3.7 0 0 1 0 7.3Z"/></svg>
         </button>
+        <button class="top-action focusable" id="power-button" type="button" aria-label="Turn off or restart">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8M6.6 6.8a7.5 7.5 0 1 0 10.8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
       </nav>
     </header>
 
@@ -43,6 +46,20 @@
       <div id="hidden-row" class="grid small" role="list"></div>
       <p id="hidden-empty">Move an app down here to hide it</p>
     </section>
+
+    <!-- The power menu (power-menu.js), opened by the power button. -->
+    <div id="power-menu" class="power-menu" role="dialog" aria-labelledby="power-title" hidden>
+      <div class="power-card">
+        <strong id="power-title">Power</strong>
+        <p>Turn off works like the remote's power button. Restart starts the TV over, which can help when an app misbehaves.</p>
+        <div class="power-actions">
+          <button class="power-choice focusable" data-power="off" type="button">Turn off</button>
+          <button class="power-choice focusable" data-power="restart" type="button">Restart</button>
+          <button class="power-choice focusable" data-power="cancel" type="button">Cancel</button>
+        </div>
+        <p id="power-status" class="status"></p>
+      </div>
+    </div>
   </main>
 
   <main id="hidden-view" class="grid-view" hidden>
@@ -244,6 +261,7 @@
   <script src="appearance-logic.js"></script>
   <script src="settings.js"></script>
   <script src="settings-page.js"></script>
+  <script src="power-menu.js"></script>
   <script src="remote.js"></script>
   <script src="sources.js"></script>
   <script src="appearance.js"></script>

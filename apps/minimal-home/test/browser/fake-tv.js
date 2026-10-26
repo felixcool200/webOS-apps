@@ -15,7 +15,8 @@
 //     answer returnValue false
 // window.FAKE_TV keeps what happened: files, launched apps (with their params in `launches`),
 // settings written (`written` as [key, value], `writes` with their category, dimension and app_id),
-// resets (`resets`), sleep timers set (`sleep`, in minutes), Wi-Fi turned on or off (`wifi`), calls made.
+// resets (`resets`), sleep timers set (`sleep`, in minutes), Wi-Fi turned on or off (`wifi`), power
+// off and restart requests (`power`), calls made.
 // Keys read or written with an app_id (TruMotion, the aspect ratio) keep one value, as this TV keeps
 // TruMotion for whatever plays.
 (function () {
@@ -23,7 +24,7 @@
 
   var CONFIG = "/home/root/.config/lginputhook/keybinds.json";
   var BACKUP = CONFIG + ".before-test";
-  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], resets: [], sleep: [], wifi: [], calls: [], counts: {}, ready: false };
+  var tv = window.FAKE_TV = { files: {}, hookLog: ["boot"], launched: [], launches: [], written: [], writes: [], resets: [], sleep: [], wifi: [], power: [], calls: [], counts: {}, ready: false };
 
   var APPS = [
     { id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" },
@@ -309,6 +310,10 @@
     if (/audio\/getSoundOutput$/.test(method)) {
       var output = valueOf("sound", "soundOutput", { audioOutput: tv.now.audioOutput });
       return { returnValue: true, soundOutput: output, lastSoundOutput: "none", settingsSoundOutputs: [output] };
+    }
+    if (/tvpower\/(power\/powerOff|power2\/reboot)$/.test(method)) {
+      tv.power.push([method.replace("com.webos.service.tvpower/", ""), payload.reason]);
+      return { returnValue: true };
     }
     if (/osInfo\/query$/.test(method)) { return { returnValue: true, webos_name: "webOS TV Lite", webos_release: "10.3.2" }; }
     if (/eim\/getAllInputStatus$/.test(method)) {

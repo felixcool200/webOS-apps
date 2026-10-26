@@ -171,6 +171,34 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 }
 
 .grid-view .top-action.focusable.is-focused { transform: scale(1.08); }
+
+/* The power menu: a popup over Home with Turn off, Restart and Cancel (power-menu.js). */
+.power-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.power-menu[hidden] { display: none; }
+
+.power-card {
+  width: 36vw;
+  padding: 3.4vh 2.4vw 2.6vh;
+  border-radius: 2vh;
+  background: linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)), var(--bg);
+  box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.5);
+}
+
+.power-card strong { font-size: 2.6vh; font-weight: 600; }
+.power-card p { margin: 1.2vh 0 2.8vh; color: var(--muted); font-size: 1.55vh; line-height: 1.45; }
+.power-actions { display: flex; gap: 1vw; }
+.power-choice { flex: 1; min-height: 6.2vh; border-radius: 999px; background: var(--surface); font-size: 1.8vh; }
+.power-card .status { min-height: 2vh; margin: 2vh 0 0; font-size: 1.45vh; }
+.power-card .status.error { color: var(--error); }
 .grid.small .app.is-focused .app-name { color: var(--text); }
 
 /* An app picked up while arranging: lifted, filled with the accent colour, with arrows beside it,
