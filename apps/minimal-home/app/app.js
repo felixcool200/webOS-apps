@@ -82,6 +82,7 @@
   // Each app's tile, made once and then moved around, so redrawing the rows never reloads an icon
   // (it would flash the initials until the image is back).
   var tiles = {};
+  var appsLoading = null;
   var holdTimer = null;
   var suppressClick = false;
   // Set while the OK press that picked a tile up is still held, so its repeats don't put it down.
@@ -579,8 +580,10 @@
   }
 
   // Reads the app list and shows it unless it is the one already shown; keeps it for the next start.
+  // A read still under way is shared rather than started again.
   function loadApps() {
-    return WebOS.retry(function () {
+    if (appsLoading) { return appsLoading; }
+    appsLoading = WebOS.retry(function () {
       return rootLuna("luna://com.webos.applicationManager/listApps", {}, APP_LIST_TIMEOUT_MS).then(function (result) {
         if (!result.apps) { throw new Error("App list unavailable"); }
         var list = JSON.stringify(result.apps.map(appSummary));
@@ -590,6 +593,9 @@
         catch (error) { console.warn("Could not keep the app list: " + error.message); }
       });
     }, APP_LIST_RETRY_MS);
+    var done = function () { appsLoading = null; };
+    appsLoading.then(done, done);
+    return appsLoading;
   }
 
   function readStoredText(key) {
@@ -617,7 +623,12 @@
     document.addEventListener("webOSRelaunch", function (event) {
       PowerMenu.close();
       stopArranging();
-      showView(viewFromParams(event.detail));
+      var name = viewFromParams(event.detail);
+      showView(name);
+      // Home keeps running, so apps installed or removed since it started show when the grid opens
+      // again. An unchanged list redraws nothing.
+      if (name !== "home") { return; }
+      loadApps().catch(function (error) { console.warn("Could not read the app list again: " + error.message); });
     });
     var system = window.webOSSystem || window.PalmSystem;
     showView(viewFromParams(system && system.launchParams));

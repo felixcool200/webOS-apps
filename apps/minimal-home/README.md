@@ -50,7 +50,7 @@ Hold OK (or the pointer button) on an app for about half a second to start arran
 
 While apps are hidden, a "Hidden apps" tile with their count ends the Tools row. It opens a view of the hidden apps, in the order they have in the Hidden box, where OK launches one: for apps used too rarely to keep on Home. Alexa, Camera, Home Hub, LG Channels, LG Gallery+, Media Player, and Sports start out hidden.
 
-The order, the Tools row, and the hidden list are kept in `localStorage` on the TV (WebAppMgr's storage under `/var/lib/wam`), so they survive reinstalling Home. Apps installed later appear after the saved order, and tools or hidden apps that are uninstalled keep their place in case they come back. The moves are in `app/home-logic.js`, tested by `test/home-logic.test.js`.
+The order, the Tools row, and the hidden list are kept in `localStorage` on the TV (WebAppMgr's storage under `/var/lib/wam`), so they survive reinstalling Home. Apps installed later appear after the saved order, and tools or hidden apps that are uninstalled keep their place in case they come back. Home keeps running, so it asks the TV for the app list again each time it opens on the app grid (the Home key, or Back from our apps), and an app installed or removed meanwhile shows without restarting Home; an unchanged list redraws nothing. The moves are in `app/home-logic.js`, tested by `test/home-logic.test.js`.
 
 ## Appearance
 

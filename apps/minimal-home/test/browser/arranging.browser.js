@@ -110,3 +110,24 @@ BrowserTest.define("the Hidden apps tile keeps the focus when the TV's app list 
   await t.until(() => t.$$("#apps .app").length > 1, 5000, "the TV's list");
   t.equal(t.focused() && t.focused().id, "hidden-tile", "still on the new Hidden apps tile");
 });
+
+BrowserTest.define("an app installed while Home runs shows when Home is opened again", {
+  tv: { apps: [{ id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" }] }
+}, async (t) => {
+  await t.homeReady();
+  t.key("RIGHT");
+  const changes = [];
+  const observer = new MutationObserver((records) => changes.push(records.length));
+  observer.observe(t.$("#home-view"), { childList: true, subtree: true, attributes: true });
+  document.dispatchEvent(new CustomEvent("webOSRelaunch", { detail: {} }));
+  await t.until(() => t.tv().counts.listApps === 2, 2000, "the list read again");
+  await t.wait(100);
+  observer.disconnect();
+  t.equal(changes, [], "an unchanged list redraws nothing");
+  window.TEST_TV.apps = [{ id: "youtube.leanback.v4", title: "YouTube" }, { id: "netflix", title: "Netflix" }, { id: "x.new", title: "New" }];
+  document.dispatchEvent(new CustomEvent("webOSRelaunch", { detail: {} }));
+  await t.until(() => t.$$("#apps .app").length === 3, 2000, "the new app's tile");
+  t.equal(t.$$("#apps .app").map((tile) => tile.getAttribute("data-app-id")), ["youtube.leanback.v4", "netflix", "x.new"], "at the end");
+  t.equal(t.focused().getAttribute("data-app-id"), "netflix", "the focus stays");
+  t.equal(JSON.parse(localStorage.getItem("home.appList")).length, 3, "kept for the next start");
+});
